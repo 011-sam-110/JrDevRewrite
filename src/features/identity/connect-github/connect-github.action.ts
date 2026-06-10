@@ -1,11 +1,11 @@
-'use server';
+﻿'use server';
 
 import { eq } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import { getDb } from '@/infra/db/client';
 import { accounts, users } from '@/infra/db/schema';
 import { getGitHubConnector } from '@/infra/github';
-import { getIdentity } from '../session';
+import { getIdentity } from '@/infra/auth';
 import { connectGitHub } from './connect-github';
 
 export async function connectGitHubAction(): Promise<void> {

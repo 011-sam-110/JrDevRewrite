@@ -1,13 +1,15 @@
 import { and, eq } from 'drizzle-orm';
 import { onboardingStatus, type OnboardingStatus } from '@/domain/identity';
-import { auth } from '@/infra/auth';
 import { getDb } from '@/infra/db/client';
 import { accounts, users } from '@/infra/db/schema';
+import { auth } from './auth';
 
 /**
- * The one identity loader every guarded page uses. Session (Auth.js) + user
- * row + GitHub link, folded through the kernel's onboardingStatus rule so all
- * guards agree on where an account stands.
+ * The one identity loader every guarded page and action uses. Session
+ * (Auth.js) + user row + GitHub link, folded through the kernel's
+ * onboardingStatus rule so all guards agree on where an account stands.
+ * Lives in infra/auth (not a feature) because slices in every feature need
+ * it — cross-slice imports are the smell VSA exists to kill.
  */
 export interface Identity {
   userId: string;

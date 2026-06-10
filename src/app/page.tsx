@@ -1,14 +1,14 @@
-import { redirect } from 'next/navigation';
+﻿import { redirect } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, Logo } from '@/components';
 import { SignInForm } from '@/features/identity/sign-in/SignInForm';
-import { getIdentity } from '@/features/identity/session';
+import { getIdentity } from '@/infra/auth';
 
 /* Auth.js error codes (?error=...) mapped to human messages. */
 const authErrors: Record<string, string> = {
-  Verification: 'That sign-in link is invalid or has expired — request a fresh one below.',
-  AccessDenied: 'Junior Dev is Sussex-only — sign in with your @sussex.ac.uk address.',
-  EmailSignInError: 'Junior Dev is Sussex-only — sign in with your @sussex.ac.uk address.',
-  Configuration: 'Sign-in is misconfigured — try again or poke the operator.',
+  Verification: 'That sign-in link is invalid or has expired â€” request a fresh one below.',
+  AccessDenied: 'Junior Dev is Sussex-only â€” sign in with your @sussex.ac.uk address.',
+  EmailSignInError: 'Junior Dev is Sussex-only â€” sign in with your @sussex.ac.uk address.',
+  Configuration: 'Sign-in is misconfigured â€” try again or poke the operator.',
 };
 
 export default async function HomePage({
@@ -21,7 +21,7 @@ export default async function HomePage({
 
   const { error } = await searchParams;
   const errorMessage = error
-    ? (authErrors[error] ?? 'Something went wrong signing you in — try again.')
+    ? (authErrors[error] ?? 'Something went wrong signing you in â€” try again.')
     : null;
 
   return (
@@ -32,7 +32,7 @@ export default async function HomePage({
           Prove you can <span className="text-volt text-glow">ship</span>.
         </h1>
         <p className="max-w-md text-sm text-fg-muted">
-          Prize-pool project competitions and live 1v1 code battles for Sussex CS students — one
+          Prize-pool project competitions and live 1v1 code battles for Sussex CS students â€” one
           profile that shows you build real things.
         </p>
       </div>
@@ -40,7 +40,7 @@ export default async function HomePage({
       <Card accent className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>Sign in</CardTitle>
-          <CardDescription>Your Sussex email is your account — no password.</CardDescription>
+          <CardDescription>Your Sussex email is your account â€” no password.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {errorMessage && (

@@ -87,10 +87,12 @@ npm run test:e2e            # Playwright (boots the dev server itself)
 npm run db:generate         # Drizzle: generate migration from schema changes
 npm run db:migrate          # apply migrations
 
+npm run pools:import        # validate + ingest manual pool specs from content/pools/*.md
+                            #   (format spec: content/pools/README.md; approval: /operator/pools)
+
 npm run dev:ws              # (M13) local realtime (WebSocket) service for battles
 docker compose up judge0    # (M12) local Judge0 code-execution sandbox
-npm run db:seed             # (M4+) seed dev data (pools, profiles, badges, problem bank, ratings)
-npm run pools:import        # (M4) validate + ingest manual pool specs from content/pools/*.md
+npm run db:seed             # (M5+) seed dev data (pools, profiles, badges, problem bank, ratings)
 ```
 
 ## Architecture (target shape)

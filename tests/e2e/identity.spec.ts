@@ -1,6 +1,5 @@
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
 import { expect, test } from '@playwright/test';
+import { magicLinkFor } from './outbox';
 
 /**
  * The full M2 identity journey: sign-up → magic link → onboarding (role +
@@ -9,27 +8,6 @@ import { expect, test } from '@playwright/test';
  * The magic link is read from the dev email adapter's file outbox
  * (.dev/outbox.jsonl) — that file IS the mocked email inbox.
  */
-
-const OUTBOX = path.join(process.cwd(), '.dev', 'outbox.jsonl');
-
-async function magicLinkFor(email: string): Promise<string> {
-  // Poll: the dev server appends asynchronously after the form submits.
-  for (let attempt = 0; attempt < 20; attempt++) {
-    const raw = await readFile(OUTBOX, 'utf8').catch(() => '');
-    const line = raw
-      .trim()
-      .split('\n')
-      .reverse()
-      .find((l) => l.includes(`"to":"${email}"`));
-    if (line) {
-      const message = JSON.parse(line) as { text: string };
-      const url = message.text.match(/https?:\/\/\S+/)?.[0];
-      if (url) return url;
-    }
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  throw new Error(`No magic link for ${email} in ${OUTBOX}`);
-}
 
 test('sign-up → onboarding → dashboard journey', async ({ page }) => {
   // Unique address per run (no plus-tags — the gate strips them by design).

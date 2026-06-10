@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation';
+﻿import { redirect } from 'next/navigation';
 import {
   AppShell,
   Badge,
@@ -13,7 +13,7 @@ import {
   StatCard,
 } from '@/components';
 import { JOB_ROLES } from '@/domain/identity';
-import { getIdentity } from '@/features/identity/session';
+import { getIdentity } from '@/infra/auth';
 import { signOutAction } from '@/features/identity/sign-in/sign-in.action';
 
 export default async function DashboardPage() {
@@ -55,9 +55,9 @@ export default async function DashboardPage() {
         />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCard label="Level" value="1" sub="0 XP — earn it in pools" accent />
-          <StatCard label="Pool rank" value="—" sub="Unranked until your first pool" />
-          <StatCard label="Battle Elo" value="—" sub="Battles arrive in Phase C" />
+          <StatCard label="Level" value="1" sub="0 XP â€” earn it in pools" accent />
+          <StatCard label="Pool rank" value="â€”" sub="Unranked until your first pool" />
+          <StatCard label="Battle Elo" value="â€”" sub="Battles arrive in Phase C" />
         </div>
 
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -65,7 +65,7 @@ export default async function DashboardPage() {
             <CardHeader>
               <CardTitle>Prize pools</CardTitle>
               <CardDescription>
-                Time-boxed project competitions for {roleLabel} — browse &amp; join opens at M5.
+                Time-boxed project competitions for {roleLabel} â€” browse &amp; join opens at M5.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -76,7 +76,7 @@ export default async function DashboardPage() {
             <CardHeader>
               <CardTitle>Code battles</CardTitle>
               <CardDescription>
-                Live 1v1, same problem, first correct solution wins — arrives in Phase C.
+                Live 1v1, same problem, first correct solution wins â€” arrives in Phase C.
               </CardDescription>
             </CardHeader>
             <CardContent>

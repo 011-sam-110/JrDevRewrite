@@ -28,6 +28,7 @@ export {
   type JoinTarget,
   type PoolDifficulty,
 } from './entry';
+export { checkWindows, schedulePool, type PoolDeadlines, type PoolWindows } from './schedule';
 export {
   aggregateVotes,
   checkBallot,

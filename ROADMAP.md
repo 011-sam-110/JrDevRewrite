@@ -58,15 +58,15 @@ Each milestone is sized to be one reviewable checkpoint.
   - [x] Vote-aggregation rule pure: ranked sets → final standings, judge-to-win eligibility filter, deterministic tie handling.
 
 ### M4: Pool persistence, manual import & approval queue
-- Status: `[ ]`
+- Status: `[x] done (2026-06-10)` — schema (profiles/pools/entries), `pools:import` CLI + 15 starter specs, `/operator/pools` approval queue; 155 unit + 7 e2e green
 - Depends on: M2, M3
 - Spec: CLAUDE.md → AI generation layer (approval queue), pool spec sources; PRD §12 #10, #13
 - Acceptance:
-  - [ ] Drizzle schema: users, profiles, pools, entries (typed end to end, migration committed).
-  - [ ] `npm run pools:import` reads `content/pools/*.md` (YAML-frontmatter entries), validates (clear per-entry error report), dedupes by slug, creates pools in `draft`.
-  - [ ] Documented manual-pool format + 3 starter specs per launch role committed as real content.
-  - [ ] Operator approval slice: list drafts → approve (`published`) / reject — operator-gated.
-  - [ ] Slice tests for import + approve; kernel rules reused, not duplicated.
+  - [x] Drizzle schema: users, profiles, pools, entries (typed end to end, migration committed).
+  - [x] `npm run pools:import` reads `content/pools/*.md` (YAML-frontmatter entries), validates (clear per-entry error report), dedupes by slug, creates pools in `draft`.
+  - [x] Documented manual-pool format + 3 starter specs per launch role committed as real content.
+  - [x] Operator approval slice: list drafts → approve (`published`) / reject — operator-gated.
+  - [x] Slice tests for import + approve; kernel rules reused, not duplicated.
 
 ### M5: Browse & join pools
 - Status: `[ ]`
@@ -228,11 +228,13 @@ Each milestone is sized to be one reviewable checkpoint.
 | Anthropic API key (build-time generation) | M12, M17 | open |
 | Container host account (Railway or Fly) | M18 | open |
 | Confirm battle languages for v1 (suggest: Python, JS/TS, Java, C++) | M12 problem bank | open |
+| Decide: local docker Postgres vs Supabase — `.env` was found pointing at a Supabase URL whose host no longer resolves (dead project?). Restored to the docker db so `db:*`/dev/tests work; the Supabase line is kept commented in `.env`. If Supabase is the plan, revive/recreate the project and we'll wire it properly. | dev DB (all milestones) | open |
 
 ## Build log
 
 *(one line per completed milestone — date, milestone, summary, commit)*
 
+- 2026-06-10 — **M4: Pool persistence, manual import & approval queue** — migration `0002`: `profiles` (xp/level/globalRank/credits — M9 owns movement, M5 owns credit policy), `pools` (kernel-typed status/role/difficulty columns; window DURATIONS from the spec + nullable deadlines stamped at approval; `rejectedAt` = archival metadata, NOT a lifecycle state — rejected drafts keep status `draft`, leave every queue, and their slug stays claimed so re-import can't resurrect them), `entries` (unique pool+user). New kernel rules (test-first): `domain/identity/operator` (env-allowlist predicate, deny-by-default) + `domain/prize-pools/schedule` (`schedulePool` lays join/build/judging windows end-to-end from the publish instant — specs are written before approval time is known). `import-pools` slice: pure multi-entry frontmatter parser (`spec-format.ts`, collects ALL problems per entry, `---` is structural → briefs use `***` hr), orchestration with injected deps (file/batch/DB dedupe by slug, valid entries import even when siblings are malformed, exit 1 on any error), `tsx` CLI; format doc + 15 starter specs (3×5 roles) in `content/pools/`; verified live: 15 created, re-run 15 skipped. `approve-pool` slice: approve = kernel `approvePool` + `schedulePool` → publish with deadlines (verified in DB: +3d/+10d/+13d), reject = `rejectedAt` stamp; operator gate enforced in the server actions (not just the page — actions are public endpoints), non-operators 404. `getIdentity` moved `features/identity/session.ts` → `infra/auth/identity.ts` (slices in other features need it; cross-slice imports are the VSA smell). `OPERATOR_EMAILS` env (+ example). Found `.env` pointing at a dead Supabase URL — restored docker db, flagged in Needs. 155 unit + 7 e2e (operator gate ×3) green; screenshots `.claude/debug-shots/m4-*.png`. Commit `TBD`.
 - 2026-06-10 — **M3: Pool domain kernel** — `src/domain/prize-pools/` (pure, zero infra imports): `lifecycle.ts` — explicit transition table, operator `approvePool`, time-driven `tickPool(pool, now)` returning new snapshot + effects-as-data (`refund-credits`, `notify-extension`, `assign-judges`, `finalize-results`) for the M5 cron slice to execute; extension shifts all three deadlines +48h; deadlines inclusive (`now >= deadline` fires); defensive published→cancelled edge keeps the rule total. `entry.ts` — `checkJoin` collects ALL failed guards (role match, rank-gated difficulty tiers beginner/0 intermediate/100 advanced/250 (tunable until M9), cap-3 via shared `ACTIVE_POOL_STATUSES`, window/capacity/dup). `vote-aggregation.ts` — normalized Borda (`(k-1-i)/(k-1)`, mean per entry) so different ballot sizes compare; `checkBallot` makes self-votes impossible by construction; judge-to-win filter splits honest `standings` from awarded `finalPlacements`; deterministic ties (score → firsts → entryId) + order-independent fold; throws on corrupt ballots. 77 tests, written first. Commit `eb59509`.
 - 2026-06-10 — **M2: Identity** — pure enrolment gate in `domain/identity/` (exact-domain `@sussex.ac.uk`, lowercasing, plus-tag stripping — 22 tests incl. lookalike domains), Auth.js v5 magic-link (custom EmailConfig through mockable `infra/email`; dev adapter logs + writes `.dev/outbox.jsonl` which the e2e reads as its inbox; `normalizeIdentifier` enforces the gate at the auth boundary), Drizzle adapter schema (users/accounts/sessions/verification_tokens + jobRole, migration `0001`), VSA slices `sign-in`/`select-role`/`connect-github` with injected-deps tests, mock GitHub connector behind `infra/github` seam, guarded `/` → `/onboarding` (2-step) → `/dashboard` via one `getIdentity()` loader + kernel `onboardingStatus`. 35 unit + 4 e2e green; screenshots in `.claude/debug-shots/m2-*.png`. Vitest now resolves the `@/` alias. Commit `91478d2`.
 - 2026-06-10 — **M1: Design system** — "arena terminal" aesthetic: Tailwind v4 `@theme` tokens (volt `#bfff3f` accent, gold/silver/bronze/elo, OLED blue-black surfaces, cut-corner signature, snap easing), Russo One + Chakra Petch + JetBrains Mono via `next/font`, 9 primitives in `src/components/` (button/card/badge/input+field/modal/nav shell/page layout/leaderboard row+stat card/toast) with a11y wiring (focus-visible volt ring, aria-live toasts, labelled dialog, reduced-motion), `/styleguide` page + client demo island, screenshots (desktop 1440 / mobile 390 / modal open) in `.claude/debug-shots/`. 7 unit tests green. Commit `b6951b0`.
