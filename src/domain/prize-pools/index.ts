@@ -16,6 +16,13 @@ export {
   type TickResult,
 } from './lifecycle';
 export {
+  CREDIT_REASONS,
+  creditDelta,
+  JOIN_CREDIT_COST,
+  STARTING_CREDITS,
+  type CreditReason,
+} from './credits';
+export {
   ACTIVE_POOL_CAP,
   ACTIVE_POOL_STATUSES,
   checkJoin,

@@ -89,6 +89,8 @@ npm run db:migrate          # apply migrations
 
 npm run pools:import        # validate + ingest manual pool specs from content/pools/*.md
                             #   (format spec: content/pools/README.md; approval: /operator/pools)
+npm run pools:tick          # execute due pool-lifecycle transitions (what the host cron runs;
+                            #   safe to re-run — refunds dedupe on the credit ledger)
 
 npm run dev:ws              # (M13) local realtime (WebSocket) service for battles
 docker compose up judge0    # (M12) local Judge0 code-execution sandbox

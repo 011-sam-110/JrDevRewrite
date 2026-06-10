@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { JOIN_CREDIT_COST } from './credits';
 import {
   ACTIVE_POOL_CAP,
   ACTIVE_POOL_STATUSES,
@@ -24,6 +25,7 @@ function candidate(overrides: Partial<JoinCandidate> = {}): JoinCandidate {
     jobRole: 'backend',
     globalRank: 0,
     activePoolCount: 0,
+    credits: 5,
     alreadyEntered: false,
     ...overrides,
   };
@@ -118,12 +120,31 @@ describe('checkJoin — single-guard rejections', () => {
       reasons: ['already-entered'],
     });
   });
+
+  it('not enough credits to cover the entry cost', () => {
+    expect(checkJoin(candidate({ credits: JOIN_CREDIT_COST - 1 }), target(), NOW)).toEqual({
+      ok: false,
+      reasons: ['insufficient-credits'],
+    });
+  });
+
+  it('exactly the entry cost is enough', () => {
+    expect(checkJoin(candidate({ credits: JOIN_CREDIT_COST }), target(), NOW)).toEqual({
+      ok: true,
+    });
+  });
 });
 
 describe('checkJoin — reasons accumulate', () => {
   it('reports every failed guard, not just the first', () => {
     const result = checkJoin(
-      candidate({ jobRole: 'ml', globalRank: 0, activePoolCount: 3, alreadyEntered: true }),
+      candidate({
+        jobRole: 'ml',
+        globalRank: 0,
+        activePoolCount: 3,
+        credits: 0,
+        alreadyEntered: true,
+      }),
       target({ difficulty: 'advanced', entrantCount: 30 }),
       NOW,
     );
@@ -134,6 +155,7 @@ describe('checkJoin — reasons accumulate', () => {
         'role-mismatch',
         'difficulty-locked',
         'active-pool-cap-reached',
+        'insufficient-credits',
         'already-entered',
       ],
     });

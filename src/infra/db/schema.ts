@@ -4,6 +4,7 @@ import type { JobRole } from '../../domain/identity';
 import {
   DEFAULT_ENTRANT_CAP,
   MIN_ENTRANTS,
+  type CreditReason,
   type PoolDifficulty,
   type PoolStatus,
 } from '../../domain/prize-pools';
@@ -146,6 +147,33 @@ export const entries = pgTable(
     joinedAt: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (entry) => [unique('entries_pool_user_unique').on(entry.poolId, entry.userId)],
+);
+
+/**
+ * Credit ledger (M5) — one row per credit movement, amounts derived from the
+ * kernel's `creditDelta` so policy and bookkeeping can't drift. The cached
+ * balance lives on `profiles.credits`; the ledger is the audit trail AND the
+ * idempotency lock: the unique (user, pool, reason) index makes a double
+ * debit or double refund for the same pool a constraint violation, so a
+ * crashed-and-rerun lifecycle job can't refund anyone twice.
+ */
+export const creditTransactions = pgTable(
+  'credit_transactions',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Null for movements not tied to a pool (the starting grant). */
+    poolId: text('pool_id').references(() => pools.id, { onDelete: 'cascade' }),
+    /** Signed: grants/refunds positive, joins negative. */
+    amount: integer('amount').notNull(),
+    reason: text('reason').$type<CreditReason>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (tx) => [unique('credit_tx_user_pool_reason_unique').on(tx.userId, tx.poolId, tx.reason)],
 );
 
 /** One-time magic-link tokens (hashed by Auth.js before storage). */

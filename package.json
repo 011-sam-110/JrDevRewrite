@@ -12,7 +12,8 @@
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "pools:import": "tsx src/features/prize-pools/import-pools/cli.ts"
+    "pools:import": "tsx src/features/prize-pools/import-pools/cli.ts",
+    "pools:tick": "tsx src/features/prize-pools/tick-pools/cli.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.2",

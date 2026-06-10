@@ -6,6 +6,7 @@
  */
 
 import type { JobRole } from '../identity';
+import { JOIN_CREDIT_COST } from './credits';
 import { isJoinable, type PoolStatus, type PoolSnapshot } from './lifecycle';
 
 /** Binding v1 decision: a user may be in at most 3 concurrently active pools. */
@@ -53,6 +54,8 @@ export interface JoinCandidate {
   globalRank: number;
   /** Pools the user has entered whose status is in ACTIVE_POOL_STATUSES. */
   activePoolCount: number;
+  /** Free-credit balance (domain/prize-pools/credits) — joining costs JOIN_CREDIT_COST. */
+  credits: number;
   alreadyEntered: boolean;
 }
 
@@ -72,6 +75,7 @@ export type JoinRejection =
   | 'role-mismatch'
   | 'difficulty-locked'
   | 'active-pool-cap-reached'
+  | 'insufficient-credits'
   | 'already-entered';
 
 export type JoinCheck = { ok: true } | { ok: false; reasons: JoinRejection[] };
@@ -97,6 +101,7 @@ export function checkJoin(user: JoinCandidate, pool: JoinTarget, now: Date): Joi
   if (pool.role !== user.jobRole) reasons.push('role-mismatch');
   if (!difficultyUnlocked(user.globalRank, pool.difficulty)) reasons.push('difficulty-locked');
   if (user.activePoolCount >= ACTIVE_POOL_CAP) reasons.push('active-pool-cap-reached');
+  if (user.credits < JOIN_CREDIT_COST) reasons.push('insufficient-credits');
   if (user.alreadyEntered) reasons.push('already-entered');
 
   return reasons.length === 0 ? { ok: true } : { ok: false, reasons };
