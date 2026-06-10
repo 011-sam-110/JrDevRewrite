@@ -21,6 +21,7 @@ import {
 } from '@/features/prize-pools/browse-pools/PoolCard';
 import { timeLeftLabel } from '@/features/prize-pools/browse-pools/browse-pools';
 import { getPoolDetail } from '@/features/prize-pools/browse-pools/directory';
+import { getJudgingTask } from '@/features/prize-pools/cast-vote/judge-task';
 import { JoinPoolButton } from '@/features/prize-pools/join-pool/JoinPoolButton';
 import { JOIN_REJECTION_LABELS } from '@/features/prize-pools/join-pool/rejection-labels';
 import { SubmitEntryForm } from '@/features/prize-pools/submit-entry/SubmitEntryForm';
@@ -45,6 +46,11 @@ export default async function PoolDetailPage({ params }: { params: Promise<{ poo
   const { view, mySubmission } = detail;
 
   const isOpen = view.status === 'published' || view.status === 'extended';
+
+  // During judging, surface the entrant's judging duty (ensures assignments
+  // exist as a side effect — idempotent). Skipped otherwise to avoid the work.
+  const judging =
+    view.joined && view.status === 'judging' ? await getJudgingTask(identity.userId, poolId) : null;
 
   return (
     <AppShell
@@ -155,6 +161,29 @@ export default async function PoolDetailPage({ params }: { params: Promise<{ poo
                         <p className="font-semibold text-danger">
                           Removed from judging after anti-cheat review.
                         </p>
+                      ) : view.status === 'judging' ? (
+                        judging?.alreadyVoted ? (
+                          <p className="font-semibold text-volt">
+                            Judging complete — you ranked your assigned demos. You&apos;re eligible
+                            to win.
+                          </p>
+                        ) : (judging?.submissions.length ?? 0) > 0 ? (
+                          <div className="space-y-2">
+                            <p className="text-gold">
+                              Judging is open — rank your assigned demos to stay eligible to win.
+                            </p>
+                            <a
+                              href={`/pools/${view.id}/judge`}
+                              className="cut-corner inline-flex h-10 items-center justify-center bg-volt px-5 text-sm font-semibold tracking-wider text-ink uppercase shadow-glow transition-colors hover:bg-volt-bright"
+                            >
+                              Judge submissions
+                            </a>
+                          </div>
+                        ) : (
+                          <p className="text-fg-subtle">
+                            Judging is open. You have no submissions assigned to review.
+                          </p>
+                        )
                       ) : (
                         <p className="text-fg-subtle">
                           Demo uploaded — assigned judges review it after the build window closes.

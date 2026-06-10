@@ -79,3 +79,14 @@ export {
   type JudgedEntry,
   type Standing,
 } from './vote-aggregation';
+export {
+  assignJudges,
+  checkAssignmentBallot,
+  DEFAULT_REVIEW_SET_SIZE,
+  MIN_JUDGEABLE_ENTRIES,
+  reviewSetSize,
+  type AssignmentBallotCheck,
+  type AssignmentBallotRejection,
+  type JudgeableForAssignment,
+  type JudgeAssignment,
+} from './judge-assignment';

@@ -43,6 +43,13 @@
       "when": 1781094091348,
       "tag": "0005_green_tattoo",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781097976446,
+      "tag": "0006_secret_ultimates",
+      "breakpoints": true
     }
   ]
 }

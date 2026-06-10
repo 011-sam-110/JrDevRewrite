@@ -13,6 +13,8 @@ import { ACTIVE_POOL_STATUSES, creditDelta } from '../../../domain/prize-pools';
 import { getDb } from '../../../infra/db/client';
 import { creditTransactions, entries, pools, profiles, users } from '../../../infra/db/schema';
 import { getEmailClient } from '../../../infra/email';
+import { ensurePoolAssignments } from '../assign-judges/assign-judges';
+import { makeAssignJudgesDeps } from '../assign-judges/assign-deps';
 import { tickPools, type TickablePool, type TickPoolsDeps } from './tick-pools';
 
 const NOTIFICATIONS = {
@@ -137,8 +139,17 @@ const deps: TickPoolsDeps = {
     }
   },
 
+  assignJudges: async (poolId) => {
+    const result = await ensurePoolAssignments(makeAssignJudgesDeps(), poolId);
+    console.log(
+      result.created
+        ? `judges   assigned ${result.judges} judges for pool ${poolId}`
+        : `judges   pool ${poolId} already assigned or too small — skipped`,
+    );
+  },
+
   recordUnhandledEffect: async (poolId, effect) => {
-    // Executors land with M8 (assign-judges) and M9 (finalize-results).
+    // Executor lands with M9 (finalize-results).
     console.log(`pending  ${effect} for pool ${poolId} — executor arrives in a later milestone`);
   },
 };

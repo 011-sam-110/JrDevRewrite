@@ -37,6 +37,7 @@ function makeDeps(poolList: TickablePool[], overrides: Partial<TickPoolsDeps> = 
     persistTransition: vi.fn(async () => {}),
     refundEntrants: vi.fn(async () => 0),
     notifyEntrants: vi.fn(async () => {}),
+    assignJudges: vi.fn(async () => {}),
     recordUnhandledEffect: vi.fn(async () => {}),
     ...overrides,
   };
@@ -113,12 +114,13 @@ describe('tickPools — join window closes', () => {
 });
 
 describe('tickPools — later windows', () => {
-  it('build deadline → judging; assign-judges is recorded for M8, not dropped', async () => {
+  it('build deadline → judging; assign-judges runs the assignment effect (M8)', async () => {
     const deps = makeDeps([pool({ status: 'building', joinDeadline: PAST, buildDeadline: PAST })]);
     const report = await tickPools(deps, NOW);
 
     expect(report.transitions[0]).toMatchObject({ to: 'judging', effects: ['assign-judges'] });
-    expect(deps.recordUnhandledEffect).toHaveBeenCalledWith('pool-1', 'assign-judges');
+    expect(deps.assignJudges).toHaveBeenCalledWith('pool-1');
+    expect(deps.recordUnhandledEffect).not.toHaveBeenCalled();
   });
 
   it('judging deadline → closed; finalize-results is recorded for M9', async () => {

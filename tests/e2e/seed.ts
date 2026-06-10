@@ -107,6 +107,53 @@ export async function seedBuildingPool(opts: {
   return { id, slug, title };
 }
 
+/**
+ * A pool already in `judging`: join and build windows closed in the past, the
+ * judging window is open now. The judging journey needs this state with several
+ * submitted entries already in place, without driving the multi-day lifecycle.
+ */
+export async function seedJudgingPool(opts: {
+  role: string;
+  difficulty?: string;
+  title?: string;
+}): Promise<SeededPool> {
+  const db = new Pool({ connectionString: process.env.DATABASE_URL });
+  const id = randomUUID();
+  const slug = `e2e-judge-${opts.role}-${Date.now()}-${id.slice(0, 4)}`;
+  const title = opts.title ?? `E2E ${opts.role} judging pool ${id.slice(0, 4)}`;
+  const now = Date.now();
+  const HOUR = 3_600_000;
+
+  try {
+    await db.query(
+      `insert into pools (
+         id, slug, title, role, difficulty, status, source, brief, requirements,
+         join_window_hours, build_window_hours, judging_window_hours,
+         entrant_cap, min_entrants, extensions_used,
+         join_deadline, build_deadline, judging_deadline, published_at
+       ) values ($1, $2, $3, $4, $5, 'judging', 'manual', $6, $7,
+                 24, 72, 48, 30, 6, 0, $8, $9, $10, $11)`,
+      [
+        id,
+        slug,
+        title,
+        opts.role,
+        opts.difficulty ?? 'beginner',
+        'Build a small real project against this brief. Seeded by the e2e suite.',
+        JSON.stringify(['Ship something real', 'Commit as you go']),
+        new Date(now - 96 * HOUR), // join window closed long ago
+        new Date(now - 2 * HOUR), // build window closed 2h ago
+        new Date(now + 46 * HOUR), // judging window open
+        new Date(now - 120 * HOUR), // published_at
+      ],
+    );
+  } finally {
+    await db.end();
+  }
+
+  return { id, slug, title };
+}
+
 /** Make the user (looked up by email) an entrant in a pool — without joining via the UI. */
 export async function addEntrant(poolId: string, email: string): Promise<void> {
   const db = new Pool({ connectionString: process.env.DATABASE_URL });

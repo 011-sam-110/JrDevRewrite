@@ -31,7 +31,9 @@ export interface TickPoolsDeps {
   /** Refund every entrant's join debit; idempotent. Returns refunds written. */
   refundEntrants(poolId: string): Promise<number>;
   notifyEntrants(poolId: string, kind: 'extension' | 'cancellation'): Promise<void>;
-  /** Effects whose executors land later (assign-judges → M8, finalize-results → M9). */
+  /** Generate the judging round's review assignments (M8); idempotent. */
+  assignJudges(poolId: string): Promise<void>;
+  /** Effects whose executors land later (finalize-results → M9). */
   recordUnhandledEffect(poolId: string, effect: PoolEffect): Promise<void>;
 }
 
@@ -60,6 +62,8 @@ async function runEffect(deps: TickPoolsDeps, poolId: string, effect: PoolEffect
       await deps.notifyEntrants(poolId, 'cancellation');
       return;
     case 'assign-judges':
+      await deps.assignJudges(poolId);
+      return;
     case 'finalize-results':
       await deps.recordUnhandledEffect(poolId, effect);
       return;
