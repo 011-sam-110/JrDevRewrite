@@ -14,7 +14,9 @@ import {
   StatCard,
 } from '@/components';
 import { JOB_ROLES } from '@/domain/identity';
+import { levelProgress } from '@/domain/gamification';
 import { getIdentity } from '@/infra/auth';
+import { ensureProfile } from '@/infra/db/profiles';
 import { signOutAction } from '@/features/identity/sign-in/sign-in.action';
 import { MAIN_NAV } from '@/lib/nav';
 
@@ -24,6 +26,11 @@ export default async function DashboardPage() {
   if (identity.status !== 'complete') redirect('/onboarding');
 
   const roleLabel = JOB_ROLES.find((r) => r.id === identity.jobRole)?.label ?? identity.jobRole;
+
+  // Real gamification numbers — XP/rank move when a pool closes (M9).
+  const profile = await ensureProfile(identity.userId);
+  const progress = levelProgress(profile.xp);
+  const xpToNext = progress.xpForNextLevel - progress.xpIntoLevel;
 
   return (
     <AppShell
@@ -57,8 +64,21 @@ export default async function DashboardPage() {
         />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCard label="Level" value="1" sub="0 XP — earn it in pools" accent />
-          <StatCard label="Pool rank" value="—" sub="Unranked until your first pool" />
+          <StatCard
+            label="Level"
+            value={String(progress.level)}
+            sub={`${profile.xp.toLocaleString()} XP · ${xpToNext} to next`}
+            accent
+          />
+          <StatCard
+            label="Pool rank"
+            value={profile.globalRank > 0 ? String(profile.globalRank) : '—'}
+            sub={
+              profile.globalRank > 0
+                ? `streak ${profile.poolStreak}`
+                : 'Unranked until your first pool'
+            }
+          />
           <StatCard label="Battle Elo" value="—" sub="Battles arrive in Phase C" />
         </div>
 

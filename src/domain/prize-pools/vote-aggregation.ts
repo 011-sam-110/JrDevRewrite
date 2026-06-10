@@ -59,6 +59,31 @@ export function checkBallot(ballot: Ballot, entries: JudgedEntry[]): BallotCheck
   return reasons.length === 0 ? { ok: true } : { ok: false, reasons };
 }
 
+/**
+ * Reconcile cast ballots against the CURRENTLY judgeable field, producing a set
+ * that `aggregateVotes` will accept. Two cleanups, both for the same cause — an
+ * anti-cheat scan that flagged an entry AFTER judges had already ranked it:
+ *
+ *  1. A ranked entry that is no longer judgeable is stripped from the ranking
+ *     (the flagged build vanishes from every ballot); a ballot left with < 2
+ *     entries to compare is dropped.
+ *  2. A ballot whose JUDGE no longer owns a judgeable entry is dropped — their
+ *     own entry was flagged out of the field, so the kernel no longer recognises
+ *     them as an entrant-judge. Their judging duty still counts toward
+ *     eligibility (that's "cast a ballot", tracked from the raw ballots before
+ *     this runs); only their influence on the tally is removed.
+ *
+ * Without this, a late flag would make `aggregateVotes` throw on the whole pool.
+ */
+export function reconcileBallots(ballots: Ballot[], judgeable: JudgedEntry[]): Ballot[] {
+  const judgeableIds = new Set(judgeable.map((e) => e.entryId));
+  const judgeOwners = new Set(judgeable.map((e) => e.ownerId));
+  return ballots
+    .filter((b) => judgeOwners.has(b.judgeId))
+    .map((b) => ({ ...b, ranking: b.ranking.filter((id) => judgeableIds.has(id)) }))
+    .filter((b) => b.ranking.length >= 2);
+}
+
 export interface Standing {
   entryId: string;
   ownerId: string;

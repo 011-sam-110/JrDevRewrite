@@ -15,6 +15,8 @@ import { creditTransactions, entries, pools, profiles, users } from '../../../in
 import { getEmailClient } from '../../../infra/email';
 import { ensurePoolAssignments } from '../assign-judges/assign-judges';
 import { makeAssignJudgesDeps } from '../assign-judges/assign-deps';
+import { closePool } from '../close-pool/close-pool';
+import { makeClosePoolDeps } from '../close-pool/close-deps';
 import { tickPools, type TickablePool, type TickPoolsDeps } from './tick-pools';
 
 const NOTIFICATIONS = {
@@ -148,9 +150,15 @@ const deps: TickPoolsDeps = {
     );
   },
 
-  recordUnhandledEffect: async (poolId, effect) => {
-    // Executor lands with M9 (finalize-results).
-    console.log(`pending  ${effect} for pool ${poolId} — executor arrives in a later milestone`);
+  finalizeResults: async (poolId) => {
+    const result = await closePool(makeClosePoolDeps(), poolId);
+    if (!result.ok) {
+      console.error(`results  pool ${poolId}: ${result.error}`);
+      return;
+    }
+    console.log(
+      `results  pool ${poolId}: finalized ${result.finalized}/${result.entrants} entrants`,
+    );
   },
 };
 

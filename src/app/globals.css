@@ -85,6 +85,23 @@
   text-shadow: 0 0 14px rgb(191 255 63 / 0.45);
 }
 
+/* Staggered entrance for the results reveal — placements drop in one by one.
+   Content is always in the DOM (animation only moves opacity/translate), so it
+   stays readable with JS off and under prefers-reduced-motion (collapsed above). */
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@utility reveal-up {
+  animation: reveal-up 0.5s var(--ease-snap) both;
+}
+
 /* ============================================================
    Base
    ============================================================ */

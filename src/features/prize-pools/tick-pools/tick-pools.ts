@@ -33,8 +33,8 @@ export interface TickPoolsDeps {
   notifyEntrants(poolId: string, kind: 'extension' | 'cancellation'): Promise<void>;
   /** Generate the judging round's review assignments (M8); idempotent. */
   assignJudges(poolId: string): Promise<void>;
-  /** Effects whose executors land later (finalize-results → M9). */
-  recordUnhandledEffect(poolId: string, effect: PoolEffect): Promise<void>;
+  /** Finalize a closed pool: tally → award XP/rank → persist results (M9); idempotent. */
+  finalizeResults(poolId: string): Promise<void>;
 }
 
 export interface TickTransition {
@@ -65,7 +65,7 @@ async function runEffect(deps: TickPoolsDeps, poolId: string, effect: PoolEffect
       await deps.assignJudges(poolId);
       return;
     case 'finalize-results':
-      await deps.recordUnhandledEffect(poolId, effect);
+      await deps.finalizeResults(poolId);
       return;
   }
 }

@@ -7,8 +7,9 @@ import { tickPools, type TickablePool, type TickPoolsDeps } from './tick-pools';
  * tested in domain/), this slice EXECUTES — persistence, refunds,
  * notifications. These tests pin the orchestration contract: effects run
  * BEFORE the status is persisted (a crash mid-run must re-run effects, never
- * strand them), refunds map to the refund dep, unbuilt effects (M8/M9) are
- * recorded rather than dropped, and one broken pool doesn't stall the rest.
+ * strand them), refunds map to the refund dep, each effect maps to its dep
+ * (assign-judges → M8, finalize-results → M9), and one broken pool doesn't
+ * stall the rest.
  */
 
 const NOW = new Date('2026-07-10T12:00:00Z');
@@ -38,7 +39,7 @@ function makeDeps(poolList: TickablePool[], overrides: Partial<TickPoolsDeps> = 
     refundEntrants: vi.fn(async () => 0),
     notifyEntrants: vi.fn(async () => {}),
     assignJudges: vi.fn(async () => {}),
-    recordUnhandledEffect: vi.fn(async () => {}),
+    finalizeResults: vi.fn(async () => {}),
     ...overrides,
   };
 }
@@ -120,17 +121,34 @@ describe('tickPools — later windows', () => {
 
     expect(report.transitions[0]).toMatchObject({ to: 'judging', effects: ['assign-judges'] });
     expect(deps.assignJudges).toHaveBeenCalledWith('pool-1');
-    expect(deps.recordUnhandledEffect).not.toHaveBeenCalled();
+    expect(deps.finalizeResults).not.toHaveBeenCalled();
   });
 
-  it('judging deadline → closed; finalize-results is recorded for M9', async () => {
+  it('judging deadline → closed; finalize-results runs the close effect (M9)', async () => {
     const deps = makeDeps([
       pool({ status: 'judging', joinDeadline: PAST, buildDeadline: PAST, judgingDeadline: PAST }),
     ]);
     const report = await tickPools(deps, NOW);
 
     expect(report.transitions[0]).toMatchObject({ to: 'closed', effects: ['finalize-results'] });
-    expect(deps.recordUnhandledEffect).toHaveBeenCalledWith('pool-1', 'finalize-results');
+    expect(deps.finalizeResults).toHaveBeenCalledWith('pool-1');
+  });
+
+  it('finalize-results runs BEFORE the close is persisted (crash-safe, idempotent)', async () => {
+    const order: string[] = [];
+    const deps = makeDeps(
+      [pool({ status: 'judging', joinDeadline: PAST, buildDeadline: PAST, judgingDeadline: PAST })],
+      {
+        finalizeResults: vi.fn(async () => {
+          order.push('finalize');
+        }),
+        persistTransition: vi.fn(async () => {
+          order.push('persist');
+        }),
+      },
+    );
+    await tickPools(deps, NOW);
+    expect(order).toEqual(['finalize', 'persist']);
   });
 });
 

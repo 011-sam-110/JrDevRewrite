@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { aggregateVotes, checkBallot, type Ballot, type JudgedEntry } from './vote-aggregation';
+import {
+  aggregateVotes,
+  checkBallot,
+  reconcileBallots,
+  type Ballot,
+  type JudgedEntry,
+} from './vote-aggregation';
 
 /**
  * Peer ranked-voting is the SOLE decider of pool results (binding v1 decision),
@@ -266,5 +272,71 @@ describe('aggregateVotes — refuses corrupt input loudly', () => {
     expect(() => aggregateVotes({ entries, ballots, completedJudgeIds: allOwners })).toThrow(
       /duplicate ballot/,
     );
+  });
+});
+
+describe('reconcileBallots — absorbs late anti-cheat flags', () => {
+  it('leaves clean ballots untouched', () => {
+    const ballots: Ballot[] = [
+      { judgeId: 'A', ranking: ['b', 'c'] },
+      { judgeId: 'B', ranking: ['c', 'a'] },
+    ];
+    expect(reconcileBallots(ballots, entries)).toEqual(ballots);
+  });
+
+  it('strips an entry that became non-judgeable after the ballot was cast', () => {
+    // Judge A ranked [b, c, a]; later c was flagged and excluded → c judgeable no more.
+    const judgeable: JudgedEntry[] = [
+      { entryId: 'a', ownerId: 'A' },
+      { entryId: 'b', ownerId: 'B' },
+    ];
+    const ballots: Ballot[] = [{ judgeId: 'A', ranking: ['b', 'c', 'a'] }];
+    expect(reconcileBallots(ballots, judgeable)).toEqual([{ judgeId: 'A', ranking: ['b', 'a'] }]);
+  });
+
+  it('drops a ballot left with fewer than two comparable entries', () => {
+    const judgeable: JudgedEntry[] = [
+      { entryId: 'a', ownerId: 'A' },
+      { entryId: 'b', ownerId: 'B' },
+    ];
+    const ballots: Ballot[] = [
+      { judgeId: 'A', ranking: ['b', 'c'] }, // c excluded → only [b] left → dropped
+      { judgeId: 'B', ranking: ['a', 'b'] }, // both survive → kept
+    ];
+    expect(reconcileBallots(ballots, judgeable)).toEqual([{ judgeId: 'B', ranking: ['a', 'b'] }]);
+  });
+
+  it('drops a ballot whose judge’s own entry was flagged out of the field', () => {
+    // X judged a and b in good faith, but X's own entry was later upheld-flagged,
+    // so X no longer owns a judgeable entry. Their tally influence is removed.
+    const judgeable: JudgedEntry[] = [
+      { entryId: 'a', ownerId: 'A' },
+      { entryId: 'b', ownerId: 'B' },
+    ];
+    const ballots: Ballot[] = [
+      { judgeId: 'A', ranking: ['b', 'a'] },
+      { judgeId: 'X', ranking: ['a', 'b'] }, // X owns the flagged entry → dropped
+    ];
+    expect(reconcileBallots(ballots, judgeable)).toEqual([{ judgeId: 'A', ranking: ['b', 'a'] }]);
+  });
+
+  it('feeds aggregateVotes safely after a flag that would otherwise throw', () => {
+    // c is flagged out: the raw ballots reference it (unknown-entry → throw),
+    // but reconciled they aggregate cleanly over {a, b}.
+    const judgeable: JudgedEntry[] = [
+      { entryId: 'a', ownerId: 'A' },
+      { entryId: 'b', ownerId: 'B' },
+    ];
+    const raw: Ballot[] = [
+      { judgeId: 'A', ranking: ['b', 'c'] },
+      { judgeId: 'B', ranking: ['a', 'c'] },
+    ];
+    const reconciled = reconcileBallots(raw, judgeable);
+    const { finalPlacements } = aggregateVotes({
+      entries: judgeable,
+      ballots: reconciled,
+      completedJudgeIds: ['A', 'B'],
+    });
+    expect(finalPlacements).toEqual(['a', 'b']);
   });
 });

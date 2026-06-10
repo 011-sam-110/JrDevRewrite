@@ -1,4 +1,14 @@
-import { integer, jsonb, pgTable, primaryKey, text, timestamp, unique } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  real,
+  text,
+  timestamp,
+  unique,
+} from 'drizzle-orm/pg-core';
 import type { AdapterAccountType } from 'next-auth/adapters';
 import type { JobRole } from '../../domain/identity';
 import {
@@ -78,9 +88,10 @@ export const sessions = pgTable('sessions', {
  */
 
 /**
- * Per-user gamification state (XP/level/rank movement is the M9 kernel's job;
- * the columns exist now so entry guards and M5's credit debit have a home).
- * Kept apart from `users` because Auth.js owns that table's shape.
+ * Per-user gamification state. The XP/level/rank/streak numbers move when a pool
+ * CLOSES (the M9 close-pool slice awards them atomically from pool_results); the
+ * entry guards and M5's credit debit read them. Kept apart from `users` because
+ * Auth.js owns that table's shape.
  */
 export const profiles = pgTable('profiles', {
   userId: text('user_id')
@@ -90,6 +101,8 @@ export const profiles = pgTable('profiles', {
   level: integer('level').notNull().default(1),
   /** Global pool-rank points — drives difficulty gating (domain/prize-pools/entry). */
   globalRank: integer('global_rank').notNull().default(0),
+  /** Consecutive CLOSED pools completed (domain/gamification advanceStreak). */
+  poolStreak: integer('pool_streak').notNull().default(0),
   /** Free pool-entry credits; grant/debit policy lands with M5's join slice. */
   credits: integer('credits').notNull().default(0),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -236,6 +249,48 @@ export const ballots = pgTable(
     submittedAt: timestamp('submitted_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (b) => [unique('ballot_pool_judge_unique').on(b.poolId, b.judgeUserId)],
+);
+
+/**
+ * Finalized pool results (M9) — one row per entrant, written atomically when a
+ * pool CLOSES (the close-pool slice executing the `finalize-results` lifecycle
+ * effect). The unique (pool, user) index is the idempotency lock: XP and rank
+ * points are awarded exactly once even if the close runs twice (crash recovery,
+ * a double cron tick). The row both feeds the reveal page (placement + score)
+ * and is the audit trail for the gamification numbers it moved on the profile
+ * (xp/rank/streak granted by this pool).
+ */
+export const poolResults = pgTable(
+  'pool_results',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    poolId: text('pool_id')
+      .notNull()
+      .references(() => pools.id, { onDelete: 'cascade' }),
+    entryId: text('entry_id')
+      .notNull()
+      .references(() => entries.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** 1-based placement among eligible finishers; null if they didn't place. */
+    placement: integer('placement'),
+    /** Mean normalized Borda score in [0,1]; 0 if the entry wasn't judged. */
+    score: real('score').notNull().default(0),
+    eligibleToWin: boolean('eligible_to_win').notNull(),
+    submitted: boolean('submitted').notNull(),
+    judged: boolean('judged').notNull(),
+    /** XP this pool granted (pool-local base + streak bonus). */
+    xpAwarded: integer('xp_awarded').notNull(),
+    /** Global-rank points this pool granted. */
+    rankAwarded: integer('rank_awarded').notNull(),
+    /** The participation streak after this pool — audit of the streak math. */
+    streakAfter: integer('streak_after').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (r) => [unique('pool_results_pool_user_unique').on(r.poolId, r.userId)],
 );
 
 /**

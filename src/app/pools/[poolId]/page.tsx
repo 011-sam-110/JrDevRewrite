@@ -130,7 +130,18 @@ export default async function PoolDetailPage({ params }: { params: Promise<{ poo
                 <CardTitle>{view.joined ? "You're in" : 'Entry'}</CardTitle>
               </CardHeader>
               <CardContent>
-                {view.joined ? (
+                {view.status === 'closed' ? (
+                  <div className="space-y-3 text-sm text-fg-muted">
+                    <p className="font-semibold text-volt">This pool has closed.</p>
+                    <p>Final standings, XP and rank are in.</p>
+                    <a
+                      href={`/pools/${view.id}/results`}
+                      className="cut-corner inline-flex h-10 items-center justify-center bg-volt px-5 text-sm font-semibold tracking-wider text-ink uppercase shadow-glow transition-colors hover:bg-volt-bright"
+                    >
+                      View results
+                    </a>
+                  </div>
+                ) : view.joined ? (
                   mySubmission?.submitted ? (
                     <div className="space-y-2 text-sm text-fg-muted">
                       <p className="font-semibold text-volt">Entry submitted.</p>

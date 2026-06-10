@@ -71,6 +71,7 @@ export {
 export {
   aggregateVotes,
   checkBallot,
+  reconcileBallots,
   type AggregationInput,
   type AggregationResult,
   type Ballot,

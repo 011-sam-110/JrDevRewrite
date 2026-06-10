@@ -50,6 +50,13 @@
       "when": 1781097976446,
       "tag": "0006_secret_ultimates",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781121615778,
+      "tag": "0007_chunky_molecule_man",
+      "breakpoints": true
     }
   ]
 }

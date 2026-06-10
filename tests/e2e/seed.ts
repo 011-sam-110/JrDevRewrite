@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { execSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 
@@ -116,6 +117,8 @@ export async function seedJudgingPool(opts: {
   role: string;
   difficulty?: string;
   title?: string;
+  /** Put the judging deadline in the PAST so a `pools:tick` run closes the pool. */
+  expired?: boolean;
 }): Promise<SeededPool> {
   const db = new Pool({ connectionString: process.env.DATABASE_URL });
   const id = randomUUID();
@@ -123,6 +126,10 @@ export async function seedJudgingPool(opts: {
   const title = opts.title ?? `E2E ${opts.role} judging pool ${id.slice(0, 4)}`;
   const now = Date.now();
   const HOUR = 3_600_000;
+  // Status stays `judging` either way (only the cron closes it); the deadline
+  // controls whether a tick decides judging → closed. Judging via the UI is
+  // gated on status, not the deadline, so an expired pool is still judgeable.
+  const judgingDeadline = opts.expired ? new Date(now - 1 * HOUR) : new Date(now + 46 * HOUR);
 
   try {
     await db.query(
@@ -143,7 +150,7 @@ export async function seedJudgingPool(opts: {
         JSON.stringify(['Ship something real', 'Commit as you go']),
         new Date(now - 96 * HOUR), // join window closed long ago
         new Date(now - 2 * HOUR), // build window closed 2h ago
-        new Date(now + 46 * HOUR), // judging window open
+        judgingDeadline,
         new Date(now - 120 * HOUR), // published_at
       ],
     );
@@ -152,6 +159,21 @@ export async function seedJudgingPool(opts: {
   }
 
   return { id, slug, title };
+}
+
+/**
+ * Run the real lifecycle cron (`npm run pools:tick`) synchronously — the same
+ * production code path the host scheduler runs. The full-loop e2e uses this to
+ * close a pool whose judging deadline has passed (driving judging → closed and
+ * the finalize-results award), instead of waiting out the multi-day window or
+ * reimplementing the close in the test. Idempotent, so it's safe to call once.
+ */
+export function runPoolsTick(): string {
+  return execSync('npm run pools:tick', {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    stdio: 'pipe',
+  });
 }
 
 /** Make the user (looked up by email) an entrant in a pool — without joining via the UI. */
