@@ -13,7 +13,7 @@ Each milestone is sized to be one reviewable checkpoint.
 ## Phase A — Foundation
 
 ### M0: Scaffold & toolchain
-- Status: `[x] done (2026-06-10)` — Next 15.5 + TS 5.9 strict, Drizzle/Postgres 17, Vitest + Playwright, hooks live
+- Status: `[x] done (2026-06-10, 84cabeb)` — Next 15.5 + TS 5.9 strict, Drizzle/Postgres 17, Vitest + Playwright, hooks live
 - Depends on: —
 - Spec: CLAUDE.md → Stack, Commands, Architecture
 - Acceptance:
@@ -233,4 +233,4 @@ Each milestone is sized to be one reviewable checkpoint.
 
 *(one line per completed milestone — date, milestone, summary, commit)*
 
-- 2026-06-10 — **M0: Scaffold & toolchain** — Next.js 15.5 (App Router, TS 5.9 strict), ESLint 9 + Prettier, VSA skeleton (`features/domain/infra/realtime/components/lib` + `content/pools` + `tests/e2e`), Drizzle + Postgres 17 (docker compose `db`, first migration applied), Vitest (4 tests) + Playwright smoke e2e passing, quality-gate + pre-commit hooks verified live. TS pinned to 5.x (TS 6 breaks Next 15 CSS imports). Old top-level `skills/` removed (superseded by `.claude/skills/`).
+- 2026-06-10 — **M0: Scaffold & toolchain** — Next.js 15.5 (App Router, TS 5.9 strict), ESLint 9 + Prettier, VSA skeleton (`features/domain/infra/realtime/components/lib` + `content/pools` + `tests/e2e`), Drizzle + Postgres 17 (docker compose `db`, first migration applied), Vitest (4 tests) + Playwright smoke e2e passing, quality-gate + pre-commit hooks verified live. TS pinned to 5.x (TS 6 breaks Next 15 CSS imports). Old top-level `skills/` removed (superseded by `.claude/skills/`). Commit `84cabeb`.
