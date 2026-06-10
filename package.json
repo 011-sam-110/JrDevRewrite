@@ -14,6 +14,7 @@
     "db:migrate": "drizzle-kit migrate",
     "pools:import": "tsx src/features/prize-pools/import-pools/cli.ts",
     "pools:tick": "tsx src/features/prize-pools/tick-pools/cli.ts",
+    "pools:scan": "tsx src/features/prize-pools/scan-submissions/cli.ts",
     "email:verify": "tsx src/infra/email/verify.ts"
   },
   "dependencies": {

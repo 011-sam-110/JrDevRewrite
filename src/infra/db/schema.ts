@@ -5,8 +5,11 @@ import {
   DEFAULT_ENTRANT_CAP,
   MIN_ENTRANTS,
   type CreditReason,
+  type ModerationStatus,
+  type OriginalityFlag,
   type PoolDifficulty,
   type PoolStatus,
+  type SimilarityMatch,
 } from '../../domain/prize-pools';
 
 /** Trivial first table proving the migration pipeline end to end (M0). */
@@ -136,6 +139,12 @@ export const pools = pgTable('pools', {
  * the entrant submits during the build window: the linked competition repo, the
  * repo's GitHub-side creation time (captured at verification, kept for audit /
  * M7 re-checks), and the demo-video ref. `submittedAt` set = a complete entry.
+ *
+ * The moderation fields (M7) carry the anti-cheat flag lifecycle
+ * (domain/prize-pools/moderation): `moderationStatus` gates judging eligibility
+ * (none/cleared judgeable; flagged/upheld excluded), and the reasons/matches/
+ * timestamps are the evidence the operator reviews. Defaults make every
+ * pre-M7 row (and every fresh entry) judgeable until a scan says otherwise.
  */
 export const entries = pgTable(
   'entries',
@@ -159,6 +168,16 @@ export const entries = pgTable(
     videoPlaybackUrl: text('video_playback_url'),
     /** When the entry was submitted (repo verified + video stored). */
     submittedAt: timestamp('submitted_at', { withTimezone: true }),
+    /** Anti-cheat flag state (M7); the value space is the kernel's union. */
+    moderationStatus: text('moderation_status').$type<ModerationStatus>().notNull().default('none'),
+    /** Which originality flags fired, for the operator's review context. */
+    flagReasons: jsonb('flag_reasons').$type<OriginalityFlag[]>().notNull().default([]),
+    /** The offending similar entries + scores that triggered the flag. */
+    flagMatches: jsonb('flag_matches').$type<SimilarityMatch[]>().notNull().default([]),
+    /** When the scan raised the flag. */
+    flaggedAt: timestamp('flagged_at', { withTimezone: true }),
+    /** When the operator upheld/cleared it. */
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
   },
   (entry) => [unique('entries_pool_user_unique').on(entry.poolId, entry.userId)],
 );

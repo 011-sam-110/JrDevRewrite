@@ -91,6 +91,9 @@ npm run pools:import        # validate + ingest manual pool specs from content/p
                             #   (format spec: content/pools/README.md; approval: /operator/pools)
 npm run pools:tick          # execute due pool-lifecycle transitions (what the host cron runs;
                             #   safe to re-run — refunds dedupe on the credit ledger)
+npm run pools:scan          # anti-cheat scan: flag duplicate/reused submissions for operator
+                            #   review (host cron; safe to re-run — never re-flags reviewed work).
+                            #   Review queue: /operator/flags
 
 npm run dev:ws              # (M13) local realtime (WebSocket) service for battles
 docker compose up judge0    # (M12) local Judge0 code-execution sandbox

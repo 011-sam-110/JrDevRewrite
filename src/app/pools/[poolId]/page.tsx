@@ -146,9 +146,20 @@ export default async function PoolDetailPage({ params }: { params: Promise<{ poo
                           Submitted {formatDeadline(mySubmission.submittedAt)}.
                         </p>
                       )}
-                      <p className="text-fg-subtle">
-                        Demo uploaded — assigned judges review it after the build window closes.
-                      </p>
+                      {mySubmission.moderationStatus === 'flagged' ? (
+                        <p className="font-semibold text-gold">
+                          Flagged by anti-cheat — under operator review. It won&apos;t be judged
+                          until the flag is cleared.
+                        </p>
+                      ) : mySubmission.moderationStatus === 'upheld' ? (
+                        <p className="font-semibold text-danger">
+                          Removed from judging after anti-cheat review.
+                        </p>
+                      ) : (
+                        <p className="text-fg-subtle">
+                          Demo uploaded — assigned judges review it after the build window closes.
+                        </p>
+                      )}
                     </div>
                   ) : view.status === 'building' ? (
                     <SubmitEntryForm poolId={view.id} />

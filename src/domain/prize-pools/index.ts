@@ -37,6 +37,26 @@ export {
 } from './entry';
 export { checkWindows, schedulePool, type PoolDeadlines, type PoolWindows } from './schedule';
 export {
+  assessOriginality,
+  DEFAULT_ORIGINALITY_THRESHOLDS,
+  type OriginalityFlag,
+  type OriginalityThresholds,
+  type OriginalityVerdict,
+  type SimilarityComparison,
+  type SimilarityKind,
+  type SimilarityMatch,
+} from './originality';
+export {
+  canAutoFlag,
+  isJudgeable,
+  JUDGING_EXCLUDED_STATUSES,
+  MODERATION_STATUSES,
+  reviewFlag,
+  type ModerationStatus,
+  type ReviewDecision,
+  type ReviewFlagOutcome,
+} from './moderation';
+export {
   checkRepoFreshness,
   checkSubmissionWindow,
   type BuildWindow,

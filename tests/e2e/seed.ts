@@ -120,3 +120,45 @@ export async function addEntrant(poolId: string, email: string): Promise<void> {
     await db.end();
   }
 }
+
+/**
+ * Create a verified user directly. The anti-cheat scan compares ENTRANTS, so a
+ * flagged-path test needs several real users without driving each through the
+ * (multi-step) magic-link + onboarding flow. Returns the new user id.
+ */
+export async function seedUser(email: string, jobRole = 'backend'): Promise<string> {
+  const db = new Pool({ connectionString: process.env.DATABASE_URL });
+  const id = randomUUID();
+  try {
+    await db.query(
+      `insert into users (id, email, email_verified, job_role)
+         values ($1, $2, now(), $3)`,
+      [id, email, jobRole],
+    );
+  } finally {
+    await db.end();
+  }
+  return id;
+}
+
+/**
+ * Seed a user's COMPLETE submission in a pool (entrant + repo + submittedAt),
+ * moderation_status defaulting to 'none' so the scan can evaluate it. Two users
+ * given the same repoUrl is the duplicate the anti-cheat scan must catch.
+ */
+export async function addSubmittedEntry(
+  poolId: string,
+  userId: string,
+  repoUrl: string,
+): Promise<void> {
+  const db = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    await db.query(
+      `insert into entries (id, pool_id, user_id, repo_url, repo_created_at, submitted_at)
+         values ($1, $2, $3, $4, now(), now())`,
+      [randomUUID(), poolId, userId, repoUrl],
+    );
+  } finally {
+    await db.end();
+  }
+}

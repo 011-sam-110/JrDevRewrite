@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { JobRole } from '@/domain/identity';
-import type { PoolDifficulty } from '@/domain/prize-pools';
+import type { ModerationStatus, PoolDifficulty } from '@/domain/prize-pools';
 import { getDb } from '@/infra/db/client';
 import { countActivePools, countEntrants } from '@/infra/db/pool-queries';
 import { ensureProfile } from '@/infra/db/profiles';
@@ -99,6 +99,8 @@ export interface MySubmission {
   repoUrl: string | null;
   videoPlaybackUrl: string | null;
   submittedAt: Date | null;
+  /** Anti-cheat flag state (M7) — drives the "under review" / "removed" notice. */
+  moderationStatus: ModerationStatus;
 }
 
 export async function getPoolDetail(
@@ -125,6 +127,7 @@ export async function getPoolDetail(
         repoUrl: myEntry.repoUrl,
         videoPlaybackUrl: myEntry.videoPlaybackUrl,
         submittedAt: myEntry.submittedAt,
+        moderationStatus: myEntry.moderationStatus,
       }
     : null;
 
