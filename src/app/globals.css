@@ -1,16 +1,126 @@
 @import 'tailwindcss';
 
-/* Design tokens land in M1 (design system). Keep M0 minimal and unopinionated. */
+/* ============================================================
+   Junior Dev design tokens — the single source of truth.
+   Tailwind v4 turns every token here into utilities
+   (bg-surface, text-volt, shadow-glow, rounded-md, ...).
+   Components must consume tokens, never raw hex.
+   ============================================================ */
+
+@theme {
+  /* -- Surfaces (deep blue-black, OLED-friendly) -- */
+  --color-ink: #0a0e16; /* darkest — also text-on-accent */
+  --color-bg: #0a0e16;
+  --color-surface: #0f1626;
+  --color-raised: #161f33;
+  --color-edge: #25304c;
+  --color-edge-subtle: #1a2338;
+
+  /* -- Text -- */
+  --color-fg: #e9eef8;
+  --color-fg-muted: #9aa7c2;
+  --color-fg-subtle: #64708f;
+
+  /* -- Volt: the one dominant accent (the "go" signal) -- */
+  --color-volt: #bfff3f;
+  --color-volt-bright: #d4ff7a;
+  --color-volt-dim: #86b82a;
+
+  /* -- Semantic / gamification accents -- */
+  --color-info: #53d1ff;
+  --color-gold: #ffc53d; /* XP, badges, rank #1 */
+  --color-silver: #c7d2e5; /* rank #2 */
+  --color-bronze: #e8a06b; /* rank #3 */
+  --color-elo: #b197fc; /* battle rating */
+  --color-success: #3ddc85;
+  --color-warning: #ffb224;
+  --color-danger: #ff6161;
+
+  /* -- Radii (angular, esports plate — not pill-soft) -- */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+
+  /* -- Shadows / glows -- */
+  --shadow-card: inset 0 1px 0 0 rgb(255 255 255 / 0.04), 0 8px 24px rgb(0 0 0 / 0.45);
+  --shadow-glow: 0 0 20px rgb(191 255 63 / 0.18);
+  --shadow-glow-strong: 0 0 32px rgb(191 255 63 / 0.35);
+
+  /* -- Motion -- */
+  --ease-snap: cubic-bezier(0.2, 0.9, 0.25, 1);
+  --default-transition-duration: 180ms;
+}
+
+/* Fonts are wired by next/font in layout.tsx; `inline` keeps the
+   runtime CSS variables (resolved per-request) referenced directly. */
+@theme inline {
+  --font-sans: var(--font-chakra), 'Segoe UI', sans-serif;
+  --font-display: var(--font-russo), var(--font-chakra), sans-serif;
+  --font-mono: var(--font-jetbrains), Consolas, monospace;
+}
+
+/* ============================================================
+   Signature utilities
+   ============================================================ */
+
+/* The cut top-right corner — the brand plate shape. */
+@utility clip-corner {
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+}
+@utility clip-corner-sm {
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+}
+
+/* Faint blueprint grid for hero/arena backdrops. */
+@utility bg-grid {
+  background-image:
+    linear-gradient(rgb(37 48 76 / 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(37 48 76 / 0.35) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+@utility text-glow {
+  text-shadow: 0 0 14px rgb(191 255 63 / 0.45);
+}
+
+/* ============================================================
+   Base
+   ============================================================ */
+
 :root {
   color-scheme: dark;
 }
 
 body {
-  background: #0a0a0f;
-  color: #ededf2;
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+}
+
+/* Keyboard focus is always visible, in volt, on every interactive element. */
+:focus-visible {
+  outline: 2px solid var(--color-volt);
+  outline-offset: 2px;
+}
+
+::selection {
+  background-color: var(--color-volt);
+  color: var(--color-ink);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-edge) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

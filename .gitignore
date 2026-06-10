@@ -41,5 +41,8 @@ Thumbs.db
 .claude/debug-shots/
 .claude/*.local.*
 
+# Playwright MCP scratch output (snapshots, console logs)
+.playwright-mcp/
+
 # TypeScript incremental build artifact
 *.tsbuildinfo

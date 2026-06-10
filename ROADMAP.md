@@ -26,14 +26,14 @@ Each milestone is sized to be one reviewable checkpoint.
   - [x] `npm run dev` serves http://localhost:3000; typecheck/lint/test all green.
 
 ### M1: Design system
-- Status: `[ ]`
+- Status: `[x] done (2026-06-10)` — "arena terminal" tokens (volt/gold/elo on OLED blue-black), 9 primitives, `/styleguide` verified at 1440+390
 - Depends on: M0
 - Spec: gamified-competitive aesthetic; use `frontend-design` + `ui-ux-pro-max` skills
 - Acceptance:
-  - [ ] Design tokens (palette, typography, spacing, radii, motion) defined once and consumed everywhere (Tailwind config / CSS vars).
-  - [ ] Core primitives in `src/components/`: button, card, badge/chip, input, modal, nav shell, page layout, stat/leaderboard row, toast.
-  - [ ] `/styleguide` dev page rendering every primitive in every state.
-  - [ ] Playwright screenshot evidence of `/styleguide` (desktop + mobile widths) in `.claude/debug-shots/`.
+  - [x] Design tokens (palette, typography, spacing, radii, motion) defined once and consumed everywhere (Tailwind v4 `@theme` in `globals.css`; fonts via `next/font`).
+  - [x] Core primitives in `src/components/`: button, card, badge/chip, input, modal, nav shell, page layout, stat/leaderboard row, toast.
+  - [x] `/styleguide` dev page rendering every primitive in every state.
+  - [x] Playwright screenshot evidence of `/styleguide` (desktop + mobile widths) in `.claude/debug-shots/`.
 
 ### M2: Identity — Sussex auth + GitHub connect + onboarding
 - Status: `[ ]`
@@ -233,4 +233,5 @@ Each milestone is sized to be one reviewable checkpoint.
 
 *(one line per completed milestone — date, milestone, summary, commit)*
 
+- 2026-06-10 — **M1: Design system** — "arena terminal" aesthetic: Tailwind v4 `@theme` tokens (volt `#bfff3f` accent, gold/silver/bronze/elo, OLED blue-black surfaces, cut-corner signature, snap easing), Russo One + Chakra Petch + JetBrains Mono via `next/font`, 9 primitives in `src/components/` (button/card/badge/input+field/modal/nav shell/page layout/leaderboard row+stat card/toast) with a11y wiring (focus-visible volt ring, aria-live toasts, labelled dialog, reduced-motion), `/styleguide` page + client demo island, screenshots (desktop 1440 / mobile 390 / modal open) in `.claude/debug-shots/`. 7 unit tests green.
 - 2026-06-10 — **M0: Scaffold & toolchain** — Next.js 15.5 (App Router, TS 5.9 strict), ESLint 9 + Prettier, VSA skeleton (`features/domain/infra/realtime/components/lib` + `content/pools` + `tests/e2e`), Drizzle + Postgres 17 (docker compose `db`, first migration applied), Vitest (4 tests) + Playwright smoke e2e passing, quality-gate + pre-commit hooks verified live. TS pinned to 5.x (TS 6 breaks Next 15 CSS imports). Old top-level `skills/` removed (superseded by `.claude/skills/`). Commit `84cabeb`.
