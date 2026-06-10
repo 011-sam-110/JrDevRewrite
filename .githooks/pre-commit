@@ -1,0 +1,36 @@
+#!/bin/sh
+# JrDev pre-commit gate — blocks commits that break types or tests.
+#
+# Activated with:  git config core.hooksPath .githooks
+# No-ops cleanly until the project is scaffolded (needs package.json + node_modules).
+# Bypass once (not recommended):  git commit --no-verify
+
+[ -f package.json ] || exit 0
+[ -d node_modules ] || { echo "pre-commit: deps not installed yet — skipping checks"; exit 0; }
+
+# Only run an npm script if it actually exists in package.json.
+has_script() {
+  node -e "const p=require('./package.json');process.exit(p.scripts && p.scripts['$1'] ? 0 : 1)" 2>/dev/null
+}
+
+fail=0
+
+if has_script typecheck; then
+  echo "▶ pre-commit: typecheck"
+  npm run --silent typecheck || fail=1
+fi
+
+if [ "$fail" -eq 0 ] && has_script test; then
+  echo "▶ pre-commit: tests"
+  npm run --silent test -- --run || fail=1
+fi
+
+if [ "$fail" -ne 0 ]; then
+  echo ""
+  echo "✗ pre-commit blocked: fix the errors above."
+  echo "  (To bypass once, intentionally: git commit --no-verify)"
+  exit 1
+fi
+
+echo "✓ pre-commit checks passed"
+exit 0

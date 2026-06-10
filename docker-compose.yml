@@ -1,0 +1,22 @@
+# Local infrastructure for Junior Dev.
+#   db      — PostgreSQL (the only service in M0; judge0 joins in M12).
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: jrdev-db
+    environment:
+      POSTGRES_USER: jrdev
+      POSTGRES_PASSWORD: jrdev
+      POSTGRES_DB: jrdev
+    ports:
+      - '5432:5432'
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U jrdev -d jrdev']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  dbdata:

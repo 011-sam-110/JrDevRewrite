@@ -1,0 +1,45 @@
+# Dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# Next.js
+/.next/
+/out/
+/build
+next-env.d.ts
+
+# Production build output
+/dist
+
+# Environment / secrets  (commit a .env.example instead)
+.env
+.env*.local
+
+# Testing / coverage
+/coverage
+/playwright-report/
+/test-results/
+/blob-report/
+/playwright/.cache/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+
+# Claude Code — keep shared config, skills, hooks and memory TRACKED;
+# ignore only personal/local settings and scratch output.
+.claude/settings.local.json
+.claude/debug-shots/
+.claude/*.local.*
+
+# TypeScript incremental build artifact
+*.tsbuildinfo

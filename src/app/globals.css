@@ -1,0 +1,16 @@
+@import 'tailwindcss';
+
+/* Design tokens land in M1 (design system). Keep M0 minimal and unopinionated. */
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background: #0a0a0f;
+  color: #ededf2;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+}
