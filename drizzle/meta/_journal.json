@@ -57,6 +57,13 @@
       "when": 1781121615778,
       "tag": "0007_chunky_molecule_man",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1781131212393,
+      "tag": "0008_misty_risque",
+      "breakpoints": true
     }
   ]
 }

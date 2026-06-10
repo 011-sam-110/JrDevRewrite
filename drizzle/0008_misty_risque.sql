@@ -1,0 +1,1 @@
+ALTER TABLE "profiles" ADD COLUMN "visibility" text DEFAULT 'public' NOT NULL;

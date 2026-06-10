@@ -191,6 +191,176 @@ export async function addEntrant(poolId: string, email: string): Promise<void> {
 }
 
 /**
+ * A pool already `closed` — for the profile/leaderboard specs, which need
+ * finalized pool_results without driving the whole lifecycle. Deadlines all sit
+ * in the past.
+ */
+export async function seedClosedPool(opts: {
+  role: string;
+  difficulty?: string;
+  title?: string;
+}): Promise<SeededPool> {
+  const db = new Pool({ connectionString: process.env.DATABASE_URL });
+  const id = randomUUID();
+  const slug = `e2e-closed-${opts.role}-${Date.now()}-${id.slice(0, 4)}`;
+  const title = opts.title ?? `E2E ${opts.role} closed pool ${id.slice(0, 4)}`;
+  const now = Date.now();
+  const HOUR = 3_600_000;
+  try {
+    await db.query(
+      `insert into pools (
+         id, slug, title, role, difficulty, status, source, brief, requirements,
+         join_window_hours, build_window_hours, judging_window_hours,
+         entrant_cap, min_entrants, extensions_used,
+         join_deadline, build_deadline, judging_deadline, published_at
+       ) values ($1, $2, $3, $4, $5, 'closed', 'manual', $6, $7,
+                 24, 72, 48, 30, 6, 0, $8, $9, $10, $11)`,
+      [
+        id,
+        slug,
+        title,
+        opts.role,
+        opts.difficulty ?? 'intermediate',
+        'Build a small real project against this brief. Seeded by the e2e suite.',
+        JSON.stringify(['Ship something real', 'Commit as you go']),
+        new Date(now - 200 * HOUR),
+        new Date(now - 100 * HOUR),
+        new Date(now - 10 * HOUR),
+        new Date(now - 220 * HOUR),
+      ],
+    );
+  } finally {
+    await db.end();
+  }
+  return { id, slug, title };
+}
+
+/**
+ * Create a verified user WITH a public handle (github_username) and a profile row
+ * carrying explicit gamification numbers. The profile/leaderboard specs need
+ * several ranked players resolvable at `/u/<handle>` without driving each through
+ * sign-up; these users are pure data (never logged in, so their handle is stable).
+ * Returns the new user id.
+ */
+export async function seedRankedUser(opts: {
+  email: string;
+  handle: string;
+  jobRole?: string;
+  xp: number;
+  level: number;
+  globalRank: number;
+  poolStreak?: number;
+  visibility?: 'public' | 'private';
+}): Promise<string> {
+  const db = new Pool({ connectionString: process.env.DATABASE_URL });
+  const id = randomUUID();
+  try {
+    await db.query(
+      `insert into users (id, email, email_verified, job_role, github_username)
+         values ($1, $2, now(), $3, $4)`,
+      [id, opts.email, opts.jobRole ?? 'backend', opts.handle],
+    );
+    await db.query(
+      `insert into profiles (user_id, xp, level, global_rank, pool_streak, visibility, credits)
+         values ($1, $2, $3, $4, $5, $6, 5)`,
+      [id, opts.xp, opts.level, opts.globalRank, opts.poolStreak ?? 0, opts.visibility ?? 'public'],
+    );
+  } finally {
+    await db.end();
+  }
+  return id;
+}
+
+/**
+ * Record a finalized result for a user in a (closed) pool: an entry row + the
+ * pool_results row the profile history and per-role leaderboard read from. Mirrors
+ * what the real finalize-results effect writes, without running the close.
+ */
+export async function addPoolResult(
+  poolId: string,
+  userId: string,
+  opts: {
+    placement: number | null;
+    xpAwarded: number;
+    rankAwarded: number;
+    submitted?: boolean;
+    judged?: boolean;
+    score?: number;
+  },
+): Promise<void> {
+  const db = new Pool({ connectionString: process.env.DATABASE_URL });
+  const submitted = opts.submitted ?? true;
+  try {
+    const entry = await db.query(
+      `insert into entries (id, pool_id, user_id, submitted_at)
+         values ($1, $2, $3, ${submitted ? 'now()' : 'null'})
+       returning id`,
+      [randomUUID(), poolId, userId],
+    );
+    const entryId = entry.rows[0].id as string;
+    await db.query(
+      `insert into pool_results (
+         id, pool_id, entry_id, user_id, placement, score,
+         eligible_to_win, submitted, judged, xp_awarded, rank_awarded, streak_after
+       ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0)`,
+      [
+        randomUUID(),
+        poolId,
+        entryId,
+        userId,
+        opts.placement,
+        opts.score ?? 0,
+        opts.placement != null,
+        submitted,
+        opts.judged ?? true,
+        opts.xpAwarded,
+        opts.rankAwarded,
+      ],
+    );
+  } finally {
+    await db.end();
+  }
+}
+
+/** Look up a user id by email (for assertions/seeding against a dev-login user). */
+export async function userIdByEmail(email: string): Promise<string> {
+  const db = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    const res = await db.query(`select id from users where email = $1`, [email]);
+    return res.rows[0].id as string;
+  } finally {
+    await db.end();
+  }
+}
+
+/** Set a user's profile gamification numbers (e.g. give a dev-login user a rank). */
+export async function setProfileNumbers(
+  userId: string,
+  opts: { xp?: number; level?: number; globalRank?: number; poolStreak?: number },
+): Promise<void> {
+  const db = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    await db.query(
+      `update profiles
+          set xp = coalesce($2, xp),
+              level = coalesce($3, level),
+              global_rank = coalesce($4, global_rank),
+              pool_streak = coalesce($5, pool_streak)
+        where user_id = $1`,
+      [
+        userId,
+        opts.xp ?? null,
+        opts.level ?? null,
+        opts.globalRank ?? null,
+        opts.poolStreak ?? null,
+      ],
+    );
+  } finally {
+    await db.end();
+  }
+}
+
+/**
  * Create a verified user directly. The anti-cheat scan compares ENTRANTS, so a
  * flagged-path test needs several real users without driving each through the
  * (multi-step) magic-link + onboarding flow. Returns the new user id.

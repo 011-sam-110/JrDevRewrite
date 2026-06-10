@@ -4,6 +4,7 @@ import type { NavItem } from '@/components';
 export const MAIN_NAV: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard' },
   { label: 'Pools', href: '/pools' },
+  { label: 'Leaderboard', href: '/leaderboard' },
 ];
 
 /** The operator console's nav — shared by the draft-approval and flag-review pages. */

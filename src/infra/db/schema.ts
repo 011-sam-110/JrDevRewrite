@@ -21,6 +21,7 @@ import {
   type PoolStatus,
   type SimilarityMatch,
 } from '../../domain/prize-pools';
+import type { ProfileVisibility } from '../../domain/gamification';
 
 /** Trivial first table proving the migration pipeline end to end (M0). */
 export const meta = pgTable('meta', {
@@ -103,6 +104,13 @@ export const profiles = pgTable('profiles', {
   globalRank: integer('global_rank').notNull().default(0),
   /** Consecutive CLOSED pools completed (domain/gamification advanceStreak). */
   poolStreak: integer('pool_streak').notNull().default(0),
+  /**
+   * Profile visibility (M10) — public by default (the recruiter-facing portfolio
+   * is the thesis); private hides the account from every public surface (other
+   * users' profile view, leaderboards, search). The value space is the kernel's
+   * union (domain/gamification/visibility), gated by the toggle-privacy slice.
+   */
+  visibility: text('visibility').$type<ProfileVisibility>().notNull().default('public'),
   /** Free pool-entry credits; grant/debit policy lands with M5's join slice. */
   credits: integer('credits').notNull().default(0),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

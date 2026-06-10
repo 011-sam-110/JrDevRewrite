@@ -57,7 +57,14 @@ export default async function DashboardPage() {
             <>
               <Badge variant="volt">{roleLabel}</Badge>
               {identity.githubUsername && (
-                <Badge variant="neutral">gh:{identity.githubUsername}</Badge>
+                <>
+                  <Badge variant="neutral">gh:{identity.githubUsername}</Badge>
+                  <Link href={`/u/${identity.githubUsername}`}>
+                    <Button variant="ghost" size="sm">
+                      View profile
+                    </Button>
+                  </Link>
+                </>
               )}
             </>
           }
