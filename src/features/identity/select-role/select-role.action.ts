@@ -21,6 +21,6 @@ export async function selectRoleAction(formData: FormData): Promise<void> {
     String(formData.get('role') ?? ''),
   );
 
-  // Invalid role only happens with a tampered form â€” back to the start of the step.
+  // Invalid role only happens with a tampered form — back to the start of the step.
   redirect(result.ok ? '/onboarding' : '/onboarding?error=role');
 }

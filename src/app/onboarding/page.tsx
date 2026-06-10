@@ -26,8 +26,8 @@ export default async function OnboardingPage() {
       <div className="flex items-center justify-between">
         <Logo />
         <div className="flex items-center gap-2" aria-label={`Step ${onRoleStep ? 1 : 2} of 2`}>
-          <Badge variant={onRoleStep ? 'volt' : 'neutral'}>1 Â· Role</Badge>
-          <Badge variant={onRoleStep ? 'outline' : 'volt'}>2 Â· GitHub</Badge>
+          <Badge variant={onRoleStep ? 'volt' : 'neutral'}>1 · Role</Badge>
+          <Badge variant={onRoleStep ? 'outline' : 'volt'}>2 · GitHub</Badge>
         </div>
       </div>
 
@@ -36,7 +36,7 @@ export default async function OnboardingPage() {
           <CardHeader>
             <CardTitle>Pick your battlefield</CardTitle>
             <CardDescription>
-              Your job role decides which prize pools you see. You can compete across roles later â€”
+              Your job role decides which prize pools you see. You can compete across roles later —
               this is your home turf.
             </CardDescription>
           </CardHeader>
@@ -49,7 +49,7 @@ export default async function OnboardingPage() {
           <CardHeader>
             <CardTitle>Connect GitHub</CardTitle>
             <CardDescription>
-              {roleLabel} locked in. Now connect your GitHub (read-only) â€” it&apos;s how pool work
+              {roleLabel} locked in. Now connect your GitHub (read-only) — it&apos;s how pool work
               gets verified, so it&apos;s required to compete.
             </CardDescription>
           </CardHeader>
