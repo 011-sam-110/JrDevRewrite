@@ -46,3 +46,6 @@ Thumbs.db
 
 # TypeScript incremental build artifact
 *.tsbuildinfo
+
+# Dev email outbox (magic links land here locally)
+.dev/

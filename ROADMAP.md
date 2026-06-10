@@ -36,15 +36,15 @@ Each milestone is sized to be one reviewable checkpoint.
   - [x] Playwright screenshot evidence of `/styleguide` (desktop + mobile widths) in `.claude/debug-shots/`.
 
 ### M2: Identity — Sussex auth + GitHub connect + onboarding
-- Status: `[ ]`
+- Status: `[x] done (2026-06-10)` — magic-link auth (Auth.js v5 + Drizzle), 2-step onboarding, guarded shell; 35 unit + 4 e2e green
 - Depends on: M1
 - Spec: CLAUDE.md → Binding v1 decisions (identity); PRD §6.1–6.2
 - Acceptance:
-  - [ ] Pure domain predicate: email eligibility (`@sussex.ac.uk` only) — unit-tested first, including tricky cases (subdomains, casing, plus-addressing).
-  - [ ] Auth.js magic-link sign-in restricted by that predicate; dev email adapter logs the link to console (real SMTP → Needs from Sampo).
-  - [ ] Onboarding flow: job-role selection (drives pool filtering) + mandatory GitHub account connect (OAuth, read-only) behind a mockable `infra/github` adapter.
-  - [ ] Session-guarded app shell: signed-out → landing/sign-in; signed-in-but-unboarded → onboarding; complete → dashboard.
-  - [ ] E2E: full sign-up → onboard → dashboard journey with mocked email + GitHub.
+  - [x] Pure domain predicate: email eligibility (`@sussex.ac.uk` only) — unit-tested first, including tricky cases (subdomains, casing, plus-addressing).
+  - [x] Auth.js magic-link sign-in restricted by that predicate; dev email adapter logs the link to console (real SMTP → Needs from Sampo).
+  - [x] Onboarding flow: job-role selection (drives pool filtering) + mandatory GitHub account connect (OAuth, read-only) behind a mockable `infra/github` adapter.
+  - [x] Session-guarded app shell: signed-out → landing/sign-in; signed-in-but-unboarded → onboarding; complete → dashboard.
+  - [x] E2E: full sign-up → onboard → dashboard journey with mocked email + GitHub.
 
 ## Phase B — Prize Pools (the core loop, end to end)
 
@@ -233,5 +233,6 @@ Each milestone is sized to be one reviewable checkpoint.
 
 *(one line per completed milestone — date, milestone, summary, commit)*
 
+- 2026-06-10 — **M2: Identity** — pure enrolment gate in `domain/identity/` (exact-domain `@sussex.ac.uk`, lowercasing, plus-tag stripping — 22 tests incl. lookalike domains), Auth.js v5 magic-link (custom EmailConfig through mockable `infra/email`; dev adapter logs + writes `.dev/outbox.jsonl` which the e2e reads as its inbox; `normalizeIdentifier` enforces the gate at the auth boundary), Drizzle adapter schema (users/accounts/sessions/verification_tokens + jobRole, migration `0001`), VSA slices `sign-in`/`select-role`/`connect-github` with injected-deps tests, mock GitHub connector behind `infra/github` seam, guarded `/` → `/onboarding` (2-step) → `/dashboard` via one `getIdentity()` loader + kernel `onboardingStatus`. 35 unit + 4 e2e green; screenshots in `.claude/debug-shots/m2-*.png`. Vitest now resolves the `@/` alias.
 - 2026-06-10 — **M1: Design system** — "arena terminal" aesthetic: Tailwind v4 `@theme` tokens (volt `#bfff3f` accent, gold/silver/bronze/elo, OLED blue-black surfaces, cut-corner signature, snap easing), Russo One + Chakra Petch + JetBrains Mono via `next/font`, 9 primitives in `src/components/` (button/card/badge/input+field/modal/nav shell/page layout/leaderboard row+stat card/toast) with a11y wiring (focus-visible volt ring, aria-live toasts, labelled dialog, reduced-motion), `/styleguide` page + client demo island, screenshots (desktop 1440 / mobile 390 / modal open) in `.claude/debug-shots/`. 7 unit tests green. Commit `b6951b0`.
 - 2026-06-10 — **M0: Scaffold & toolchain** — Next.js 15.5 (App Router, TS 5.9 strict), ESLint 9 + Prettier, VSA skeleton (`features/domain/infra/realtime/components/lib` + `content/pools` + `tests/e2e`), Drizzle + Postgres 17 (docker compose `db`, first migration applied), Vitest (4 tests) + Playwright smoke e2e passing, quality-gate + pre-commit hooks verified live. TS pinned to 5.x (TS 6 breaks Next 15 CSS imports). Old top-level `skills/` removed (superseded by `.claude/skills/`). Commit `84cabeb`.
