@@ -52,6 +52,14 @@ export default async function HomePage({
             </p>
           )}
           <SignInForm />
+          {process.env.NODE_ENV !== 'production' && (
+            <a
+              href="/dev/login"
+              className="text-center text-xs text-fg-subtle underline underline-offset-2 hover:text-fg-muted"
+            >
+              Dev: skip sign-in →
+            </a>
+          )}
         </CardContent>
       </Card>
     </main>
