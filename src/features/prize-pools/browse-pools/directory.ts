@@ -93,12 +93,20 @@ export async function getPoolDirectory(
   };
 }
 
+/** The viewing user's own submission state for this pool (M6), or null if unjoined. */
+export interface MySubmission {
+  submitted: boolean;
+  repoUrl: string | null;
+  videoPlaybackUrl: string | null;
+  submittedAt: Date | null;
+}
+
 export async function getPoolDetail(
   userId: string,
   jobRole: JobRole,
   poolId: string,
   now: Date,
-): Promise<{ view: PoolView; credits: number } | null> {
+): Promise<{ view: PoolView; credits: number; mySubmission: MySubmission | null } | null> {
   const row = await getDb().query.pools.findFirst({ where: eq(pools.id, poolId) });
   // Drafts are the operator's business only — to everyone else they don't exist.
   if (!row || row.status === 'draft') return null;
@@ -106,5 +114,19 @@ export async function getPoolDetail(
   const { ctx } = await buildContext(userId, jobRole);
   const [view] = await toViews([row], ctx, now);
   if (!view) return null;
-  return { view, credits: ctx.credits };
+
+  // The submission card needs to know whether THIS user has submitted yet.
+  const myEntry = await getDb().query.entries.findFirst({
+    where: and(eq(entries.poolId, poolId), eq(entries.userId, userId)),
+  });
+  const mySubmission: MySubmission | null = myEntry
+    ? {
+        submitted: myEntry.submittedAt != null,
+        repoUrl: myEntry.repoUrl,
+        videoPlaybackUrl: myEntry.videoPlaybackUrl,
+        submittedAt: myEntry.submittedAt,
+      }
+    : null;
+
+  return { view, credits: ctx.credits, mySubmission };
 }

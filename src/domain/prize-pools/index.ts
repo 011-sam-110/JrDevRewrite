@@ -37,6 +37,18 @@ export {
 } from './entry';
 export { checkWindows, schedulePool, type PoolDeadlines, type PoolWindows } from './schedule';
 export {
+  checkRepoFreshness,
+  checkSubmissionWindow,
+  type BuildWindow,
+  type FreshnessFlag,
+  type RepoFreshnessVerdict,
+  type RepoSignals,
+  type SubmissionCandidate,
+  type SubmissionRejection,
+  type SubmissionTarget,
+  type SubmissionWindowCheck,
+} from './submission';
+export {
   aggregateVotes,
   checkBallot,
   type AggregationInput,

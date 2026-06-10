@@ -2,7 +2,8 @@ import { MockGitHubConnector } from './mock-github';
 import type { GitHubConnector } from './types';
 
 export { MockGitHubConnector } from './mock-github';
-export type { GitHubConnector, GitHubProfile } from './types';
+export { parseGitHubRepoUrl, type RepoRef } from './repo-url';
+export type { GitHubConnector, GitHubProfile, RepoSignals, RepoSignalsResult } from './types';
 
 export function isGitHubOAuthConfigured(): boolean {
   return Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET);

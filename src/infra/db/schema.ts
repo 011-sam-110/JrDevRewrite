@@ -131,7 +131,12 @@ export const pools = pgTable('pools', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
-/** One user's membership in one pool. Submission fields arrive with M6. */
+/**
+ * One user's membership in one pool. The submission fields (M6) are null until
+ * the entrant submits during the build window: the linked competition repo, the
+ * repo's GitHub-side creation time (captured at verification, kept for audit /
+ * M7 re-checks), and the demo-video ref. `submittedAt` set = a complete entry.
+ */
 export const entries = pgTable(
   'entries',
   {
@@ -145,6 +150,15 @@ export const entries = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     joinedAt: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull(),
+    /** Linked competition repo (HTTPS URL), set at submission. */
+    repoUrl: text('repo_url'),
+    /** GitHub's server-side repo creation time at verification (audit trail). */
+    repoCreatedAt: timestamp('repo_created_at', { withTimezone: true }),
+    /** Demo-video asset id + playback URL (Cloudflare Stream; dev: local file). */
+    videoId: text('video_id'),
+    videoPlaybackUrl: text('video_playback_url'),
+    /** When the entry was submitted (repo verified + video stored). */
+    submittedAt: timestamp('submitted_at', { withTimezone: true }),
   },
   (entry) => [unique('entries_pool_user_unique').on(entry.poolId, entry.userId)],
 );

@@ -57,3 +57,66 @@ export async function seedPublishedPool(opts: {
 
   return { id, slug, title };
 }
+
+/**
+ * A pool already in `building`: the join window opened (and closed) in the
+ * past, the build window is open now. The submission journey needs this state
+ * without waiting for the lifecycle cron to advance a published pool through
+ * its (multi-day) join window.
+ */
+export async function seedBuildingPool(opts: {
+  role: string;
+  difficulty?: string;
+  title?: string;
+}): Promise<SeededPool> {
+  const db = new Pool({ connectionString: process.env.DATABASE_URL });
+  const id = randomUUID();
+  const slug = `e2e-build-${opts.role}-${Date.now()}-${id.slice(0, 4)}`;
+  const title = opts.title ?? `E2E ${opts.role} build pool ${id.slice(0, 4)}`;
+  const now = Date.now();
+  const HOUR = 3_600_000;
+
+  try {
+    await db.query(
+      `insert into pools (
+         id, slug, title, role, difficulty, status, source, brief, requirements,
+         join_window_hours, build_window_hours, judging_window_hours,
+         entrant_cap, min_entrants, extensions_used,
+         join_deadline, build_deadline, judging_deadline, published_at
+       ) values ($1, $2, $3, $4, $5, 'building', 'manual', $6, $7,
+                 24, 72, 48, 30, 6, 0, $8, $9, $10, $11)`,
+      [
+        id,
+        slug,
+        title,
+        opts.role,
+        opts.difficulty ?? 'beginner',
+        'Build a small real project against this brief. Seeded by the e2e suite.',
+        JSON.stringify(['Ship something real', 'Commit as you go']),
+        // join window opened 26h ago and closed 2h ago — the build window is open.
+        new Date(now - 2 * HOUR), // join_deadline = build window opened
+        new Date(now + 70 * HOUR), // build_deadline (submissions due)
+        new Date(now + 118 * HOUR), // judging_deadline
+        new Date(now - 26 * HOUR), // published_at
+      ],
+    );
+  } finally {
+    await db.end();
+  }
+
+  return { id, slug, title };
+}
+
+/** Make the user (looked up by email) an entrant in a pool — without joining via the UI. */
+export async function addEntrant(poolId: string, email: string): Promise<void> {
+  const db = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    await db.query(
+      `insert into entries (id, pool_id, user_id)
+         select $1, $2, id from users where email = $3`,
+      [randomUUID(), poolId, email],
+    );
+  } finally {
+    await db.end();
+  }
+}

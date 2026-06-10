@@ -23,6 +23,7 @@ import { timeLeftLabel } from '@/features/prize-pools/browse-pools/browse-pools'
 import { getPoolDetail } from '@/features/prize-pools/browse-pools/directory';
 import { JoinPoolButton } from '@/features/prize-pools/join-pool/JoinPoolButton';
 import { JOIN_REJECTION_LABELS } from '@/features/prize-pools/join-pool/rejection-labels';
+import { SubmitEntryForm } from '@/features/prize-pools/submit-entry/SubmitEntryForm';
 import { getIdentity } from '@/infra/auth';
 import { MAIN_NAV } from '@/lib/nav';
 
@@ -41,7 +42,7 @@ export default async function PoolDetailPage({ params }: { params: Promise<{ poo
   const now = new Date();
   const detail = await getPoolDetail(identity.userId, role, poolId, now);
   if (!detail) notFound();
-  const { view } = detail;
+  const { view, mySubmission } = detail;
 
   const isOpen = view.status === 'published' || view.status === 'extended';
 
@@ -124,11 +125,44 @@ export default async function PoolDetailPage({ params }: { params: Promise<{ poo
               </CardHeader>
               <CardContent>
                 {view.joined ? (
-                  <p className="text-sm text-fg-muted">
-                    Fresh repo + demo video submission opens with the build window (M6). Pushing
-                    in-window work to GitHub is what anti-cheat verifies — start when the window
-                    opens, not before.
-                  </p>
+                  mySubmission?.submitted ? (
+                    <div className="space-y-2 text-sm text-fg-muted">
+                      <p className="font-semibold text-volt">Entry submitted.</p>
+                      {mySubmission.repoUrl && (
+                        <p className="break-words">
+                          Repo:{' '}
+                          <a
+                            href={mySubmission.repoUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-volt-dim underline underline-offset-2"
+                          >
+                            {mySubmission.repoUrl}
+                          </a>
+                        </p>
+                      )}
+                      {mySubmission.submittedAt && (
+                        <p className="text-fg-subtle">
+                          Submitted {formatDeadline(mySubmission.submittedAt)}.
+                        </p>
+                      )}
+                      <p className="text-fg-subtle">
+                        Demo uploaded — assigned judges review it after the build window closes.
+                      </p>
+                    </div>
+                  ) : view.status === 'building' ? (
+                    <SubmitEntryForm poolId={view.id} />
+                  ) : view.status === 'published' || view.status === 'extended' ? (
+                    <p className="text-sm text-fg-muted">
+                      The build window opens when the join window closes. Create a fresh repo then —
+                      anti-cheat verifies it was created after the window opened and that you pushed
+                      work during it.
+                    </p>
+                  ) : (
+                    <p className="text-sm text-fg-muted">
+                      The build window has closed. You didn&apos;t submit an entry for this pool.
+                    </p>
+                  )
                 ) : view.verdict.ok ? (
                   <JoinPoolButton poolId={view.id} />
                 ) : (
