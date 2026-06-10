@@ -223,7 +223,7 @@ Each milestone is sized to be one reviewable checkpoint.
 | Need | For | Status |
 |------|-----|--------|
 | GitHub OAuth app (client id/secret) | M2 real GitHub connect (mocked until then) | open |
-| SMTP/email provider creds | M2 real magic-link delivery (console adapter until then) | open |
+| SMTP/email provider creds | M2 real magic-link delivery (console adapter until then) | **wired** 2026-06-10 — IONOS (`smtp.ionos.co.uk`) in `.env`; `SmtpEmailClient` behind the email seam, auto-active in prod, `npm run email:verify` confirmed conn+auth. Dev still uses the outbox. |
 | Cloudflare account (Stream + DNS) + domain name | M6 video, M18 deploy | open |
 | Anthropic API key (build-time generation) | M12, M17 | open |
 | Container host account (Railway or Fly) | M18 | open |
