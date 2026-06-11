@@ -24,8 +24,10 @@ import {
 import { ELO_START, type BattleXpResult, type ProfileVisibility } from '../../domain/gamification';
 import {
   DEFAULT_TIME_LIMIT_SECONDS,
+  type BattleCheatSignal,
   type BattleLanguage,
   type BattleOutcome,
+  type BattleReviewOutcome,
   type BattleStatus,
   type ForfeitReason,
   type HiddenTest,
@@ -134,6 +136,13 @@ export const profiles = pgTable('profiles', {
   elo: integer('elo').notNull().default(ELO_START),
   battleGames: integer('battle_games').notNull().default(0),
   battleStreak: integer('battle_streak').notNull().default(0),
+  /**
+   * Confirmed-cheating record (M16): strikes drive the escalating ban ladder
+   * (domain/battles/sanctions), `battleBannedUntil` is the entry guard every
+   * battle path checks (null = never banned; past = served).
+   */
+  battleStrikes: integer('battle_strikes').notNull().default(0),
+  battleBannedUntil: timestamp('battle_banned_until', { withTimezone: true }),
   /** Presence heartbeat (M15) — touched by the battles lobby; "online" is recency. */
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -447,6 +456,17 @@ export const battles = pgTable('battles', {
   forfeitReason: text('forfeit_reason').$type<ForfeitReason>(),
   /** The room's server-stamped anti-cheat log, persisted at settlement (M16 reads). */
   telemetry: jsonb('telemetry').$type<MatchTelemetryRecord[]>().notNull().default([]),
+  /**
+   * Anti-cheat flag evidence (M16) — the signals the post-match scan raised
+   * (status `flagged`); the operator review resolves to `reviewOutcome`
+   * exactly once. The lifecycle status STAYS `flagged` after review (terminal
+   * in the kernel's table — the flag is history); the outcome is what the
+   * queue filters on and the M7 `rejectedAt` pattern made archival.
+   */
+  flagReasons: jsonb('flag_reasons').$type<BattleCheatSignal[]>().notNull().default([]),
+  flaggedAt: timestamp('flagged_at', { withTimezone: true }),
+  reviewOutcome: text('review_outcome').$type<BattleReviewOutcome>(),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   matchedAt: timestamp('matched_at', { withTimezone: true }),
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),

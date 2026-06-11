@@ -2,7 +2,7 @@ import { LocalSimilarityClient } from './local-similarity';
 import type { SimilarityClient } from './types';
 
 export { LocalSimilarityClient } from './local-similarity';
-export { repoFingerprint } from './fingerprint';
+export { codeFingerprint, repoFingerprint } from './fingerprint';
 export type { SimilarityClient, SubmissionFingerprint } from './types';
 
 /**

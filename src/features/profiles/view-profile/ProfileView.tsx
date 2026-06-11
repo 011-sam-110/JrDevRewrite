@@ -55,7 +55,7 @@ export function ProfileView({ profile }: { profile: ProfileViewModel }) {
       </Card>
 
       {/* Headline stats */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         <StatCard
           label="Level"
           value={String(profile.level)}
@@ -66,6 +66,15 @@ export function ProfileView({ profile }: { profile: ProfileViewModel }) {
           label="Pool rank"
           value={profile.globalRank > 0 ? String(profile.globalRank) : '—'}
           sub={profile.globalRank > 0 ? 'global ladder' : 'unranked'}
+        />
+        <StatCard
+          label="Battle Elo"
+          value={profile.stats.battlesPlayed > 0 ? profile.elo.toLocaleString() : '—'}
+          sub={
+            profile.stats.battlesPlayed > 0
+              ? `${profile.stats.battleWins}W / ${profile.stats.battlesPlayed} battles`
+              : 'no rated battles'
+          }
         />
         <StatCard
           label="Wins"

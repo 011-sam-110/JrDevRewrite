@@ -143,6 +143,18 @@ async function SettledBattle({
         {headline}
       </h1>
       <p className="text-sm text-fg-muted">{detail}</p>
+      {battle.status === 'flagged' && (
+        /* Flagged results keep their Elo/XP applied (binding) but wear the
+           review state openly; an upheld review means the result was flipped
+           to a forfeit by the cheater (M16). */
+        <Badge variant={battle.reviewOutcome === 'upheld' ? 'danger' : 'neutral'}>
+          {battle.reviewOutcome === 'upheld'
+            ? 'Result overturned — rule violation confirmed'
+            : battle.reviewOutcome === 'cleared'
+              ? 'Reviewed and cleared'
+              : 'Under anti-cheat review'}
+        </Badge>
+      )}
       {mine && (
         <div className="clip-corner-sm flex items-center gap-4 border border-edge bg-surface px-6 py-4 shadow-card">
           <Badge variant="elo">Elo</Badge>

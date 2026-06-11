@@ -1,17 +1,20 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, ne } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import {
   badgeStatsFrom,
   canViewProfile,
   DEFAULT_VISIBILITY,
   earnedBadges,
+  ELO_START,
   levelProgress,
   type BadgeDef,
+  type BattleResultSummary,
   type LevelProgress,
   type ProfileVisibility,
 } from '@/domain/gamification';
 import type { PoolDifficulty } from '@/domain/prize-pools';
 import { getDb } from '@/infra/db/client';
-import { poolResults, pools, profiles, users } from '@/infra/db/schema';
+import { battleResults, poolResults, pools, profiles, users } from '@/infra/db/schema';
 
 /**
  * Read model for the public profile page — the recruiter-facing portfolio
@@ -54,11 +57,15 @@ export interface ProfileView {
   progress: LevelProgress;
   globalRank: number;
   poolStreak: number;
+  /** Battle Elo (M16) — the separate head-to-head rating. */
+  elo: number;
   stats: {
     poolsEntered: number;
     poolsSubmitted: number;
     wins: number;
     podiums: number;
+    battlesPlayed: number;
+    battleWins: number;
   };
   badges: BadgeDef[];
   history: ProfileHistoryEntry[];
@@ -107,6 +114,24 @@ export async function getProfileByHandle(
   const level = profileRow?.level ?? 1;
   const xp = profileRow?.xp ?? 0;
 
+  // Battle results in CHRONOLOGICAL order (the streak fold needs it), each row
+  // self-joined to the opponent's row so eloBefore on BOTH sides is available
+  // — that's what makes a giant-killer upset computable from the audit trail.
+  const opp = alias(battleResults, 'opp');
+  const battleRows = await db
+    .select({
+      result: battleResults.result,
+      eloBefore: battleResults.eloBefore,
+      opponentEloBefore: opp.eloBefore,
+    })
+    .from(battleResults)
+    .innerJoin(
+      opp,
+      and(eq(opp.battleId, battleResults.battleId), ne(opp.userId, battleResults.userId)),
+    )
+    .where(eq(battleResults.userId, user.id))
+    .orderBy(asc(battleResults.createdAt));
+
   const stats = badgeStatsFrom({
     profile: {
       level,
@@ -114,6 +139,13 @@ export async function getProfileByHandle(
       globalRank: profileRow?.globalRank ?? 0,
     },
     results: resultRows.map((r) => ({ placement: r.placement, submitted: r.submitted })),
+    battles: battleRows.map(
+      (b): BattleResultSummary => ({
+        result: b.result,
+        eloBefore: b.eloBefore,
+        opponentEloBefore: b.opponentEloBefore,
+      }),
+    ),
   });
 
   const history: ProfileHistoryEntry[] = resultRows.map((r) => {
@@ -145,11 +177,14 @@ export async function getProfileByHandle(
       progress: levelProgress(xp),
       globalRank: profileRow?.globalRank ?? 0,
       poolStreak: profileRow?.poolStreak ?? 0,
+      elo: profileRow?.elo ?? ELO_START,
       stats: {
         poolsEntered: stats.poolsEntered,
         poolsSubmitted: stats.poolsSubmitted,
         wins: stats.wins,
         podiums: stats.podiums,
+        battlesPlayed: stats.battlesPlayed,
+        battleWins: stats.battleWins,
       },
       badges: earnedBadges(stats),
       history,

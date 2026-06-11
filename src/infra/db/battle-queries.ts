@@ -1,4 +1,4 @@
-import { and, eq, inArray, notInArray, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lte, notInArray, or, sql } from 'drizzle-orm';
 import { ACTIVE_BATTLE_STATUSES, type QueueTicket } from '../../domain/battles';
 import { getDb } from './client';
 import { battleQueue, battles, problems, profiles, users } from './schema';
@@ -92,7 +92,15 @@ export async function loadQueueTickets(): Promise<QueueTicket[]> {
     })
     .from(battleQueue)
     .innerJoin(profiles, eq(profiles.userId, battleQueue.userId))
-    .where(and(notInArray(battleQueue.userId, busyA), notInArray(battleQueue.userId, busyB)));
+    .where(
+      and(
+        notInArray(battleQueue.userId, busyA),
+        notInArray(battleQueue.userId, busyB),
+        // Banned players never reach the pairing kernel (M16) — a stale ticket
+        // from before the ban simply stops matching until the ban lifts.
+        or(isNull(profiles.battleBannedUntil), lte(profiles.battleBannedUntil, new Date())),
+      ),
+    );
 
   return rows.map((r) => ({ userId: r.userId, elo: r.elo, enqueuedAt: r.enqueuedAt }));
 }
@@ -134,6 +142,19 @@ export async function claimQueuePair(fields: {
     if (e instanceof QueuePairConflict) return 'conflict';
     throw e;
   }
+}
+
+/**
+ * The user's battle-ban expiry, if any (M16 sanctions). Null = never banned
+ * or no profile yet; the kernel's `isBattleBanned` interprets the instant.
+ */
+export async function battleBanUntil(userId: string): Promise<Date | null> {
+  const [row] = await getDb()
+    .select({ until: profiles.battleBannedUntil })
+    .from(profiles)
+    .where(eq(profiles.userId, userId))
+    .limit(1);
+  return row?.until ?? null;
 }
 
 /** Case-insensitive lookup of a user by their public handle (GitHub username). */

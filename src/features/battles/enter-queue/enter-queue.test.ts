@@ -11,6 +11,7 @@ import { enterQueue, leaveQueue, type EnterQueueDeps, type LeaveQueueDeps } from
 function makeDeps(overrides: Partial<EnterQueueDeps> = {}): EnterQueueDeps {
   return {
     isBusy: vi.fn(async () => false),
+    isBanned: vi.fn(async () => false),
     enqueue: vi.fn(async () => {}),
     ...overrides,
   };
@@ -28,6 +29,13 @@ describe('enterQueue', () => {
     const deps = makeDeps({ isBusy: vi.fn(async () => true) });
     const result = await enterQueue(deps, 'me');
     expect(result).toEqual({ ok: false, error: 'player-busy' });
+    expect(deps.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('a banned player cannot queue (M16 sanction enforcement)', async () => {
+    const deps = makeDeps({ isBanned: vi.fn(async () => true) });
+    const result = await enterQueue(deps, 'me');
+    expect(result).toEqual({ ok: false, error: 'banned' });
     expect(deps.enqueue).not.toHaveBeenCalled();
   });
 });

@@ -25,6 +25,8 @@ export function parseChallengeTarget(input: string): string | null {
 }
 
 export interface SendChallengeDeps {
+  /** Battle ban in force for this user? (kernel isBattleBanned over the profile). */
+  isBanned(userId: string): Promise<boolean>;
   /** Look the handle up case-insensitively against linked GitHub usernames. */
   resolveOpponent(handle: string): Promise<{ userId: string } | null>;
   /** Is there already a `challenged` battle between this pair (either way)? */
@@ -36,7 +38,12 @@ export type SendChallengeResult =
   | { ok: true; battleId: string }
   | {
       ok: false;
-      error: 'invalid-target' | 'opponent-not-found' | 'self-challenge' | 'already-pending';
+      error:
+        | 'invalid-target'
+        | 'opponent-not-found'
+        | 'self-challenge'
+        | 'already-pending'
+        | 'banned';
     };
 
 export async function sendChallenge(
@@ -46,6 +53,9 @@ export async function sendChallenge(
 ): Promise<SendChallengeResult> {
   const handle = parseChallengeTarget(target);
   if (!handle) return { ok: false, error: 'invalid-target' };
+
+  // The M16 sanction guard: a battle-banned player can't open ANY entry path.
+  if (await deps.isBanned(challengerId)) return { ok: false, error: 'banned' };
 
   const opponent = await deps.resolveOpponent(handle);
   if (!opponent) return { ok: false, error: 'opponent-not-found' };

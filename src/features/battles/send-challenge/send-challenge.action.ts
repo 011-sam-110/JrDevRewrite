@@ -3,9 +3,10 @@
 import { and, eq, or } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { isBattleBanned } from '@/domain/battles';
 import { getIdentity } from '@/infra/auth';
 import { getDb } from '@/infra/db/client';
-import { userByHandle } from '@/infra/db/battle-queries';
+import { battleBanUntil, userByHandle } from '@/infra/db/battle-queries';
 import { battles } from '@/infra/db/schema';
 import { settleBattle } from '../resolve-battle/resolve-battle';
 import { makeResolveBattleDeps } from '../resolve-battle/settle-deps';
@@ -26,6 +27,7 @@ const SEND_ERROR_LABELS: Record<string, string> = {
   'opponent-not-found': 'No player with that handle.',
   'self-challenge': "You can't challenge yourself.",
   'already-pending': 'There is already a pending challenge between you two.',
+  banned: 'You are battle-banned right now.',
 };
 
 export async function sendChallengeAction(
@@ -37,6 +39,7 @@ export async function sendChallengeAction(
   if (identity.status !== 'complete') redirect('/onboarding');
 
   const deps: SendChallengeDeps = {
+    isBanned: async (userId) => isBattleBanned(await battleBanUntil(userId), new Date()),
     resolveOpponent: (handle) => userByHandle(handle),
     hasPendingChallenge: async (challengerId, opponentId) => {
       const [row] = await getDb()

@@ -9,14 +9,17 @@
 export interface EnterQueueDeps {
   /** Any battle in ACTIVE_BATTLE_STATUSES involving this user? */
   isBusy(userId: string): Promise<boolean>;
+  /** Battle ban in force? (kernel isBattleBanned over the profile — M16). */
+  isBanned(userId: string): Promise<boolean>;
   /** Insert the ticket; conflict on the PK is idempotent re-entry. */
   enqueue(userId: string): Promise<void>;
 }
 
-export type EnterQueueResult = { ok: true } | { ok: false; error: 'player-busy' };
+export type EnterQueueResult = { ok: true } | { ok: false; error: 'player-busy' | 'banned' };
 
 export async function enterQueue(deps: EnterQueueDeps, userId: string): Promise<EnterQueueResult> {
   if (await deps.isBusy(userId)) return { ok: false, error: 'player-busy' };
+  if (await deps.isBanned(userId)) return { ok: false, error: 'banned' };
   await deps.enqueue(userId);
   return { ok: true };
 }

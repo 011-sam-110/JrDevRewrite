@@ -1,7 +1,7 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, sql } from 'drizzle-orm';
 import { type JobRole } from '@/domain/identity';
 import { getDb } from '@/infra/db/client';
-import { poolResults, pools, profiles, users } from '@/infra/db/schema';
+import { battleResults, poolResults, pools, profiles, users } from '@/infra/db/schema';
 
 /**
  * Read model for the leaderboards (CLAUDE.md → Gamification: "one global pool
@@ -16,6 +16,11 @@ import { poolResults, pools, profiles, users } from '@/infra/db/schema';
  *     user earned in that role's pools. Faithful to "filtered views computed from
  *     pool results", and ready for true per-role ratings later at zero migration
  *     cost.
+ *   - BATTLE ELO board (M16) — ordered by the authoritative `profiles.elo` the
+ *     resolve-battle slice maintains. The SEPARATE, can-go-down rating: pool
+ *     rank measures shipping, Elo measures head-to-head skill (binding split).
+ *     Only players with at least one rated battle appear — an untouched 1200
+ *     is the default, not a ladder position.
  *
  * Both EXCLUDE private profiles — the privacy rule lives in
  * domain/gamification/visibility (`appearsInLeaderboard`); here it is the
@@ -35,13 +40,15 @@ export interface LeaderboardEntry {
   points: number;
   /** Total XP (global) or in-role XP (role board) — the tie-break / sub-stat. */
   xp: number;
-  /** 1st-place finishes (total on the global board, in-role on a role board). */
+  /** 1st-place finishes (battle wins on the battles board). */
   wins: number;
+  /** Rated battles played — set on the battles board only. */
+  games?: number;
   isMe: boolean;
 }
 
 export interface LeaderboardView {
-  scope: 'global' | JobRole;
+  scope: 'global' | 'battles' | JobRole;
   entries: LeaderboardEntry[];
 }
 
@@ -97,6 +104,60 @@ export async function getGlobalLeaderboard(
       points: r.points,
       xp: r.xp,
       wins: wins.get(r.userId) ?? 0,
+      isMe: r.userId === viewerUserId,
+    })),
+  };
+}
+
+/** Battle wins per user, from the settled-results audit trail. */
+async function battleWinsByUser(): Promise<Map<string, number>> {
+  const rows = await getDb()
+    .select({
+      userId: battleResults.userId,
+      wins: sql<number>`coalesce(sum(case when ${battleResults.result} = 'win' then 1 else 0 end), 0)::int`,
+    })
+    .from(battleResults)
+    .groupBy(battleResults.userId);
+  return new Map(rows.map((r) => [r.userId, r.wins]));
+}
+
+export async function getEloLeaderboard(
+  viewerUserId: string | null,
+  limit = DEFAULT_LIMIT,
+): Promise<LeaderboardView> {
+  const rows = await getDb()
+    .select({
+      userId: profiles.userId,
+      elo: profiles.elo,
+      games: profiles.battleGames,
+      xp: profiles.xp,
+      level: profiles.level,
+      githubUsername: users.githubUsername,
+      email: users.email,
+      jobRole: users.jobRole,
+    })
+    .from(profiles)
+    .innerJoin(users, eq(profiles.userId, users.id))
+    // The privacy filter in SQL, same as every board: a private account never
+    // leaves the database as a ladder row.
+    .where(and(eq(profiles.visibility, 'public'), gt(profiles.battleGames, 0)))
+    .orderBy(desc(profiles.elo), desc(profiles.battleGames))
+    .limit(limit);
+
+  const wins = await battleWinsByUser();
+
+  return {
+    scope: 'battles',
+    entries: rows.map((r, i) => ({
+      rank: i + 1,
+      userId: r.userId,
+      handle: r.githubUsername ?? localPart(r.email),
+      jobRole: r.jobRole,
+      level: r.level,
+      points: r.elo,
+      xp: r.xp,
+      wins: wins.get(r.userId) ?? 0,
+      games: r.games,
       isMe: r.userId === viewerUserId,
     })),
   };

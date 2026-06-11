@@ -25,6 +25,8 @@ export interface AcceptChallengeDeps {
   loadChallenge(battleId: string): Promise<ChallengeRow | null>;
   /** Any battle in ACTIVE_BATTLE_STATUSES involving this user? */
   isBusy(userId: string): Promise<boolean>;
+  /** Battle ban in force? (kernel isBattleBanned over the profile — M16). */
+  isBanned(userId: string): Promise<boolean>;
   /** Draw a random problem from the approved bank. */
   pickProblem(): Promise<{ problemId: string } | null>;
   /** Conditional activation: only a still-`challenged` row matches. */
@@ -38,7 +40,13 @@ export type AcceptChallengeResult =
   | { ok: true; battleId: string }
   | {
       ok: false;
-      error: 'not-found' | 'not-yours' | 'not-pending' | 'player-busy' | 'no-problems';
+      error:
+        | 'not-found'
+        | 'not-yours'
+        | 'not-pending'
+        | 'player-busy'
+        | 'player-banned'
+        | 'no-problems';
     };
 
 export async function acceptChallenge(
@@ -58,6 +66,14 @@ export async function acceptChallenge(
     deps.isBusy(challenge.playerAId),
   ]);
   if (acceptorBusy || challengerBusy) return { ok: false, error: 'player-busy' };
+
+  // And both seats must be unbanned — a sanction closes every entry path,
+  // including challenges sent before the ban landed (M16).
+  const [acceptorBanned, challengerBanned] = await Promise.all([
+    deps.isBanned(userId),
+    deps.isBanned(challenge.playerAId),
+  ]);
+  if (acceptorBanned || challengerBanned) return { ok: false, error: 'player-banned' };
 
   const problem = await deps.pickProblem();
   if (!problem) return { ok: false, error: 'no-problems' };

@@ -5,13 +5,18 @@ import { cn } from '@/lib/cn';
 import type { LeaderboardView } from './leaderboard';
 
 /**
- * The ladder surface: a scope switcher (Global + one tab per launch role) over a
- * list of `LeaderboardRow` primitives. The tabs are plain links carrying
- * `?role=…`, so the board is server-rendered, deep-linkable and shareable with
- * no client JS. Each row links to that player's public profile.
+ * The ladder surface: a scope switcher (Global + Battle Elo + one tab per
+ * launch role) over a list of `LeaderboardRow` primitives. The tabs are plain
+ * links carrying `?role=…` / `?board=battles`, so the board is
+ * server-rendered, deep-linkable and shareable with no client JS. Each row
+ * links to that player's public profile.
  */
 
-const TABS = [{ id: 'global', label: 'Global' }, ...JOB_ROLES] as const;
+const TABS = [
+  { id: 'global', label: 'Global' },
+  { id: 'battles', label: 'Battle Elo' },
+  ...JOB_ROLES,
+] as const;
 
 export function LeaderboardTable({ view }: { view: LeaderboardView }) {
   return (
@@ -19,7 +24,12 @@ export function LeaderboardTable({ view }: { view: LeaderboardView }) {
       <nav className="flex flex-wrap gap-2" aria-label="Leaderboard scope">
         {TABS.map((tab) => {
           const active = view.scope === tab.id;
-          const href = tab.id === 'global' ? '/leaderboard' : `/leaderboard?role=${tab.id}`;
+          const href =
+            tab.id === 'global'
+              ? '/leaderboard'
+              : tab.id === 'battles'
+                ? '/leaderboard?board=battles'
+                : `/leaderboard?role=${tab.id}`;
           return (
             <Link
               key={tab.id}
@@ -41,7 +51,9 @@ export function LeaderboardTable({ view }: { view: LeaderboardView }) {
       <Card>
         {view.entries.length === 0 ? (
           <p className="px-5 py-8 text-center text-sm text-fg-muted">
-            No ranked players yet. Finish a pool to claim a spot.
+            {view.scope === 'battles'
+              ? 'No rated battlers yet. Win a live battle to claim a spot.'
+              : 'No ranked players yet. Finish a pool to claim a spot.'}
           </p>
         ) : (
           <div>
@@ -50,9 +62,19 @@ export function LeaderboardTable({ view }: { view: LeaderboardView }) {
                 <LeaderboardRow
                   rank={e.rank}
                   name={e.handle}
-                  role={`Lvl ${e.level}${e.wins > 0 ? ` · ${e.wins} win${e.wins === 1 ? '' : 's'}` : ''}`}
+                  role={
+                    view.scope === 'battles'
+                      ? `${e.games ?? 0} battle${e.games === 1 ? '' : 's'} · ${e.wins} win${e.wins === 1 ? '' : 's'}`
+                      : `Lvl ${e.level}${e.wins > 0 ? ` · ${e.wins} win${e.wins === 1 ? '' : 's'}` : ''}`
+                  }
                   value={e.points.toLocaleString()}
-                  valueLabel={view.scope === 'global' ? 'rank pts' : 'role pts'}
+                  valueLabel={
+                    view.scope === 'global'
+                      ? 'rank pts'
+                      : view.scope === 'battles'
+                        ? 'Elo'
+                        : 'role pts'
+                  }
                   you={e.isMe}
                 />
               </Link>

@@ -402,12 +402,170 @@ export async function addSubmittedEntry(
   }
 }
 
+/** Set a user's battle gamification numbers (ladder/badge seeding — M16). */
+export async function setBattleNumbers(
+  userId: string,
+  opts: { elo: number; battleGames: number; battleStreak?: number },
+): Promise<void> {
+  const db = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    await db.query(
+      `update profiles
+          set elo = $2, battle_games = $3, battle_streak = coalesce($4, battle_streak)
+        where user_id = $1`,
+      [userId, opts.elo, opts.battleGames, opts.battleStreak ?? null],
+    );
+  } finally {
+    await db.end();
+  }
+}
+
+/**
+ * Record one settled battle + both battle_results rows directly (the audit
+ * shape resolve-battle writes), without fighting it through the arena. The
+ * winner sits in seat A. `at` orders the rows for the streak fold.
+ */
+export async function addBattleWin(opts: {
+  winnerId: string;
+  loserId: string;
+  winnerEloBefore: number;
+  loserEloBefore: number;
+  at: Date;
+}): Promise<string> {
+  const db = new Pool({ connectionString: process.env.DATABASE_URL });
+  const battleId = randomUUID();
+  try {
+    await db.query(
+      `insert into battles (id, status, source, player_a_id, player_b_id,
+                            winner_side, outcome, matched_at, resolved_at, created_at)
+         values ($1, 'resolved', 'challenge', $2, $3, 'a', 'decisive', $4, $4, $4)`,
+      [battleId, opts.winnerId, opts.loserId, opts.at],
+    );
+    await db.query(
+      `insert into battle_results (id, battle_id, user_id, side, result,
+                                   elo_before, elo_after, xp_awarded, streak_after, created_at)
+         values ($1, $2, $3, 'a', 'win',  $4, $5, 30, 1, $6),
+                ($7, $2, $8, 'b', 'loss', $9, $10, 5, 1, $6)`,
+      [
+        randomUUID(),
+        battleId,
+        opts.winnerId,
+        opts.winnerEloBefore,
+        opts.winnerEloBefore + 20,
+        opts.at,
+        randomUUID(),
+        opts.loserId,
+        opts.loserEloBefore,
+        opts.loserEloBefore - 20,
+      ],
+    );
+  } finally {
+    await db.end();
+  }
+  return battleId;
+}
+
+/**
+ * A RESOLVED battle whose winning submission is a verbatim copy of the seeded
+ * problem's reference solution — the bank-plagiarism case the post-match scan
+ * exists to catch, seeded settled so the operator's re-scan can flag it.
+ */
+export async function seedPlagiarisedBattle(opts: {
+  problemId: string;
+  cheaterId: string;
+  victimId: string;
+}): Promise<string> {
+  const db = new Pool({ connectionString: process.env.DATABASE_URL });
+  const battleId = randomUUID();
+  const now = new Date();
+  try {
+    await db.query(
+      `insert into battles (id, status, source, player_a_id, player_b_id, problem_id,
+                            winner_side, outcome, go_at, matched_at, resolved_at)
+         values ($1, 'resolved', 'challenge', $2, $3, $4, 'a', 'decisive', $5, $5, $6)`,
+      [
+        battleId,
+        opts.cheaterId,
+        opts.victimId,
+        opts.problemId,
+        new Date(now.getTime() - 600_000),
+        now,
+      ],
+    );
+    // The cheater's "winning" code IS the reference solution; timing is kept
+    // humanly plausible so ONLY the plagiarism family fires.
+    await db.query(
+      `insert into battle_submissions (id, battle_id, user_id, side, language, code,
+                                       at_seconds, tests_passed, tests_total, passed_all)
+         values ($1, $2, $3, 'a', 'javascript', $4, 300, 3, 3, true),
+                ($5, $2, $6, 'b', 'python', 'print(42)', 200, 0, 3, false)`,
+      [randomUUID(), battleId, opts.cheaterId, E2E_PROBLEM_SOLUTION, randomUUID(), opts.victimId],
+    );
+    await db.query(
+      `insert into battle_results (id, battle_id, user_id, side, result,
+                                   elo_before, elo_after, xp_awarded, streak_after)
+         values ($1, $2, $3, 'a', 'win',  1200, 1220, 30, 1),
+                ($4, $2, $5, 'b', 'loss', 1200, 1180, 5, 1)`,
+      [randomUUID(), battleId, opts.cheaterId, randomUUID(), opts.victimId],
+    );
+  } finally {
+    await db.end();
+  }
+  return battleId;
+}
+
+/** Read back a user's sanction state (the uphold assertions). */
+export async function getBattleSanction(
+  userId: string,
+): Promise<{ elo: number; strikes: number; bannedUntil: Date | null }> {
+  const db = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    const res = await db.query(
+      `select elo, battle_strikes, battle_banned_until from profiles where user_id = $1`,
+      [userId],
+    );
+    const row = res.rows[0];
+    return { elo: row.elo, strikes: row.battle_strikes, bannedUntil: row.battle_banned_until };
+  } finally {
+    await db.end();
+  }
+}
+
+/** Read back a battle's settled/review fields (the flip assertions). */
+export async function getBattleRow(battleId: string): Promise<{
+  status: string;
+  winnerSide: string | null;
+  forfeitReason: string | null;
+  reviewOutcome: string | null;
+}> {
+  const db = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    const res = await db.query(
+      `select status, winner_side, forfeit_reason, review_outcome from battles where id = $1`,
+      [battleId],
+    );
+    const row = res.rows[0];
+    return {
+      status: row.status,
+      winnerSide: row.winner_side,
+      forfeitReason: row.forfeit_reason,
+      reviewOutcome: row.review_outcome,
+    };
+  } finally {
+    await db.end();
+  }
+}
+
 /**
  * The battle e2e's known problem: a fixed slug the dev server is told to pick
  * (E2E_FORCE_PROBLEM_SLUG in playwright.config), upserted as APPROVED so the
  * spec can type a known-correct solution. Idempotent across runs.
  */
 export const E2E_PROBLEM_SLUG = 'e2e-sum-two-integers';
+
+/** The seeded problem's reference solution (shared so a spec can plagiarise it). */
+export const E2E_PROBLEM_SOLUTION =
+  "const [a,b]=require('fs').readFileSync(0,'utf8').trim().split(/\\s+/).map(Number);console.log(a+b)";
 
 export async function seedApprovedProblem(): Promise<{ id: string; title: string }> {
   const db = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -434,7 +592,7 @@ export async function seedApprovedProblem(): Promise<{ id: string; title: string
         E2E_PROBLEM_SLUG,
         title,
         'Read two space-separated integers `a` and `b` on one line. Print their sum.',
-        "const [a,b]=require('fs').readFileSync(0,'utf8').trim().split(/\\s+/).map(Number);console.log(a+b)",
+        E2E_PROBLEM_SOLUTION,
         JSON.stringify(tests),
       ],
     );

@@ -4,15 +4,17 @@
  * pure `earned(stats)` predicate — so adding a badge is a data edit, never a new
  * code path, and every unlock is unit-testable without a DB.
  *
- * This is the v1 POOL badge set; battle milestones (first blood, giant-killer,
- * win streaks) join the catalogue at M16 once battles exist. Tiers (bronze /
- * silver / gold) drive the medal colour on the profile and rank nothing — they
- * are display metadata, not a separate rating.
+ * Two families share the one catalogue: the v1 POOL set (M10) and the BATTLE
+ * milestones (M16 — first blood, battle-tested, win streaks, giant-killer).
+ * Tiers (bronze / silver / gold) drive the medal colour on the profile and
+ * rank nothing — they are display metadata, not a separate rating.
  *
  * The numeric thresholds are tunable product dials. The binding part is the
  * SHAPE: badges are monotonic in the stats (a better record never revokes one),
  * and shipping/placing/winning/persisting each unlock progressively rarer tiers.
  */
+
+import type { BattleXpResult } from './battle-xp';
 
 export type BadgeTier = 'bronze' | 'silver' | 'gold';
 
@@ -32,6 +34,18 @@ export interface BadgeStats {
   poolStreak: number;
   /** Global pool-rank points. */
   globalRank: number;
+  /** Settled battles this user fought (voids never reach the results table). */
+  battlesPlayed: number;
+  /** Battle wins (decisive, timeout or by opponent forfeit). */
+  battleWins: number;
+  /**
+   * Best CONSECUTIVE-win run ever, folded from the result history. "Best ever"
+   * rather than the current run so the stat itself only grows — a streak badge
+   * earned is a streak badge kept.
+   */
+  bestBattleWinStreak: number;
+  /** Wins over an opponent rated GIANT_KILLER_ELO_GAP+ above (the upset). */
+  giantKills: number;
 }
 
 export interface BadgeDef {
@@ -111,6 +125,49 @@ export const BADGES: readonly BadgeDef[] = [
     tier: 'gold',
     earned: (s) => s.poolStreak >= 5,
   },
+  // ----------------------------------------------- battle milestones (M16)
+  {
+    id: 'first-blood',
+    name: 'First Blood',
+    description: 'Won your first live code battle.',
+    tier: 'bronze',
+    earned: (s) => s.battleWins >= 1,
+  },
+  {
+    id: 'battle-tested',
+    name: 'Battle-Tested',
+    description: 'Fought 5 live battles — win or lose, you showed up.',
+    tier: 'bronze',
+    earned: (s) => s.battlesPlayed >= 5,
+  },
+  {
+    id: 'rampage',
+    name: 'Rampage',
+    description: 'Won 3 battles back-to-back.',
+    tier: 'silver',
+    earned: (s) => s.bestBattleWinStreak >= 3,
+  },
+  {
+    id: 'giant-killer',
+    name: 'Giant-Killer',
+    description: 'Beat an opponent rated 150+ Elo above you.',
+    tier: 'silver',
+    earned: (s) => s.giantKills >= 1,
+  },
+  {
+    id: 'warlord',
+    name: 'Warlord',
+    description: 'Won 10 live battles.',
+    tier: 'gold',
+    earned: (s) => s.battleWins >= 10,
+  },
+  {
+    id: 'untouchable',
+    name: 'Untouchable',
+    description: 'Won 5 battles back-to-back.',
+    tier: 'gold',
+    earned: (s) => s.bestBattleWinStreak >= 5,
+  },
 ] as const;
 
 /** The badge definitions this stat snapshot has unlocked, in catalogue order. */
@@ -138,6 +195,22 @@ export interface ProfileSummary {
   globalRank: number;
 }
 
+/**
+ * One settled battle FOR THIS USER, in chronological order — the row shape
+ * battle_results persists (eloBefore pins the rating going in, so the upset
+ * gap is computable from the audit trail alone, no replay needed).
+ */
+export interface BattleResultSummary {
+  result: BattleXpResult;
+  /** This user's rating before the battle. */
+  eloBefore: number;
+  /** The opponent's rating before the battle (their results row). */
+  opponentEloBefore: number;
+}
+
+/** Minimum Elo deficit that makes a win an upset (the giant-killer gap). */
+export const GIANT_KILLER_ELO_GAP = 150;
+
 const PODIUM_CUTOFF = 3;
 
 /**
@@ -150,8 +223,10 @@ const PODIUM_CUTOFF = 3;
 export function badgeStatsFrom(input: {
   profile: ProfileSummary;
   results: ResultSummary[];
+  /** Settled battle results in CHRONOLOGICAL order (streaks need the order). */
+  battles?: BattleResultSummary[];
 }): BadgeStats {
-  const { profile, results } = input;
+  const { profile, results, battles = [] } = input;
   let poolsSubmitted = 0;
   let wins = 0;
   let podiums = 0;
@@ -160,6 +235,24 @@ export function badgeStatsFrom(input: {
     if (r.placement === 1) wins++;
     if (r.placement != null && r.placement <= PODIUM_CUTOFF) podiums++;
   }
+
+  let battleWins = 0;
+  let bestBattleWinStreak = 0;
+  let giantKills = 0;
+  let run = 0;
+  for (const b of battles) {
+    if (b.result === 'win') {
+      battleWins++;
+      run++;
+      if (run > bestBattleWinStreak) bestBattleWinStreak = run;
+      if (b.opponentEloBefore - b.eloBefore >= GIANT_KILLER_ELO_GAP) giantKills++;
+    } else {
+      // Anything that isn't a win — loss, draw, forfeit — ends a WIN streak
+      // (a draw spares the participation streak, but it is not a win).
+      run = 0;
+    }
+  }
+
   return {
     poolsEntered: results.length,
     poolsSubmitted,
@@ -168,5 +261,9 @@ export function badgeStatsFrom(input: {
     level: profile.level,
     poolStreak: profile.poolStreak,
     globalRank: profile.globalRank,
+    battlesPlayed: battles.length,
+    battleWins,
+    bestBattleWinStreak,
+    giantKills,
   };
 }

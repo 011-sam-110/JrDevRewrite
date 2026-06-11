@@ -43,9 +43,11 @@ export {
   badgeStatsFrom,
   earnedBadgeIds,
   earnedBadges,
+  GIANT_KILLER_ELO_GAP,
   type BadgeDef,
   type BadgeStats,
   type BadgeTier,
+  type BattleResultSummary,
   type ProfileSummary,
   type ResultSummary,
 } from './badges';

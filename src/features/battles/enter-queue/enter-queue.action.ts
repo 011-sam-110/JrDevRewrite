@@ -5,7 +5,8 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getIdentity } from '@/infra/auth';
 import { getDb } from '@/infra/db/client';
-import { userIsInActiveBattle } from '@/infra/db/battle-queries';
+import { isBattleBanned } from '@/domain/battles';
+import { battleBanUntil, userIsInActiveBattle } from '@/infra/db/battle-queries';
 import { ensureProfile } from '@/infra/db/profiles';
 import { battleQueue } from '@/infra/db/schema';
 import { enterQueue, leaveQueue, type EnterQueueDeps } from './enter-queue';
@@ -26,13 +27,22 @@ export async function enterQueueAction(): Promise<QueueActionState> {
 
   const deps: EnterQueueDeps = {
     isBusy: userIsInActiveBattle,
+    isBanned: async (userId) => isBattleBanned(await battleBanUntil(userId), new Date()),
     enqueue: async (userId) => {
       await getDb().insert(battleQueue).values({ userId }).onConflictDoNothing();
     },
   };
 
   const result = await enterQueue(deps, identity.userId);
-  if (!result.ok) return { status: 'error', message: 'You are already in a battle.' };
+  if (!result.ok) {
+    return {
+      status: 'error',
+      message:
+        result.error === 'banned'
+          ? 'You are battle-banned right now.'
+          : 'You are already in a battle.',
+    };
+  }
   revalidatePath('/battles');
   return { status: 'queued' };
 }

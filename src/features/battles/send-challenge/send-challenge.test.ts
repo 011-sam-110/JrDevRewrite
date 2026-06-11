@@ -41,6 +41,7 @@ describe('parseChallengeTarget', () => {
 
 function makeDeps(overrides: Partial<SendChallengeDeps> = {}): SendChallengeDeps {
   return {
+    isBanned: vi.fn(async () => false),
     resolveOpponent: vi.fn(async () => ({ userId: 'opponent-1' })),
     hasPendingChallenge: vi.fn(async () => false),
     createChallenge: vi.fn(async () => ({ battleId: 'battle-1' })),
@@ -86,6 +87,14 @@ describe('sendChallenge', () => {
     const deps = makeDeps({ hasPendingChallenge: vi.fn(async () => true) });
     const result = await sendChallenge(deps, 'me', 'octocat');
     expect(result).toEqual({ ok: false, error: 'already-pending' });
+    expect(deps.createChallenge).not.toHaveBeenCalled();
+  });
+
+  it('a banned challenger cannot send at all (M16 sanction enforcement)', async () => {
+    const deps = makeDeps({ isBanned: vi.fn(async () => true) });
+    const result = await sendChallenge(deps, 'me', 'octocat');
+    expect(result).toEqual({ ok: false, error: 'banned' });
+    expect(deps.resolveOpponent).not.toHaveBeenCalled();
     expect(deps.createChallenge).not.toHaveBeenCalled();
   });
 });

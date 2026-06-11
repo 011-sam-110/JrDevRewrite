@@ -15,12 +15,14 @@
  * `ProblemTier`) — typed end to end, the same rule as the DB schema.
  */
 
+import { isTelemetryKind } from '@/domain/battles';
 import type {
   BattleLanguage,
   BattleStatus,
   ForfeitReason,
   PlayerSide,
   ProblemTier,
+  TelemetryKind,
 } from '@/domain/battles';
 
 /** What the opponent-facing reveal carries — no reference solution, no tests. */
@@ -40,26 +42,13 @@ export interface RevealedProblem {
  * blocked by the editor and tab/window focus changes. The client reports only
  * the KIND — the server stamps the time with its own clock, the same
  * never-trust-client-timestamps posture as the GitHub repo signals.
+ *
+ * Since M16 the vocabulary is DEFINED in the kernel (domain/battles/anti-cheat
+ * reads these records post-match) and re-exported here for the wire — types
+ * flow outward from the kernel, the same rule as the status unions above.
  */
-export const TELEMETRY_KINDS = ['paste-blocked', 'focus-lost', 'focus-regained'] as const;
-export type TelemetryKind = (typeof TELEMETRY_KINDS)[number];
-
-export function isTelemetryKind(value: unknown): value is TelemetryKind {
-  return typeof value === 'string' && (TELEMETRY_KINDS as readonly string[]).includes(value);
-}
-
-/**
- * One captured anti-cheat signal as the room records it. `atSeconds` is
- * stamped by the SERVER clock relative to the go — the client only ever names
- * the kind. Lives in the shared contract (not `realtime/`) because the M15
- * settle slice persists the log with the result and M16's pure predicates
- * read it post-match — neither may import the transport layer.
- */
-export interface MatchTelemetryRecord {
-  side: PlayerSide;
-  kind: TelemetryKind;
-  atSeconds: number;
-}
+export { TELEMETRY_KINDS, isTelemetryKind } from '@/domain/battles';
+export type { TelemetryKind, MatchTelemetryRecord } from '@/domain/battles';
 
 /**
  * The submission seam between the arena and the judge path — NOT a WS frame

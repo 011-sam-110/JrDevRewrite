@@ -21,6 +21,7 @@ import { and, eq } from 'drizzle-orm';
 import { opponentOf } from '../domain/battles';
 import type { BattleEffect, BattleSnapshot } from '../domain/battles';
 import { settleBattle } from '../features/battles/resolve-battle/resolve-battle';
+import { runPostMatchScan } from '../features/battles/resolve-battle/scan-deps';
 import { makeResolveBattleDeps } from '../features/battles/resolve-battle/settle-deps';
 import { getDb } from '../infra/db/client';
 import { battles, problems } from '../infra/db/schema';
@@ -104,12 +105,16 @@ async function executeEffects(
 
   if (effects.includes('record-result')) {
     if (battle.status === 'forfeited' && outcome?.winner) {
-      await settleBattle(
+      const result = await settleBattle(
         makeResolveBattleDeps(),
         battleId,
         { kind: 'forfeit', loser: opponentOf(outcome.winner), reason: outcome.reason ?? 'quit' },
         telemetry,
       );
+      // The automatic post-match anti-cheat pass (M16) — the settlement above
+      // persisted the telemetry, so the scan reads the full evidence. Failure-
+      // isolated inside runPostMatchScan; the settled result always stands.
+      if (result.settled) await runPostMatchScan(battleId);
     } else if (battle.status === 'resolved') {
       // Only the time-limit tick lands here: a decisive win settles in the
       // submit-solution slice, whose poke suppresses effect forwarding.
@@ -120,7 +125,10 @@ async function executeEffects(
         telemetry,
       );
       // Tell both clients the scored winner the transport announced as null.
-      if (result.settled) registry.get(battleId)?.settleFromAuthority(result.winnerSide);
+      if (result.settled) {
+        registry.get(battleId)?.settleFromAuthority(result.winnerSide);
+        await runPostMatchScan(battleId);
+      }
     }
   }
 

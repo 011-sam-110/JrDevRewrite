@@ -5,7 +5,12 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getIdentity } from '@/infra/auth';
 import { getDb } from '@/infra/db/client';
-import { pickRandomApprovedProblem, userIsInActiveBattle } from '@/infra/db/battle-queries';
+import { isBattleBanned } from '@/domain/battles';
+import {
+  battleBanUntil,
+  pickRandomApprovedProblem,
+  userIsInActiveBattle,
+} from '@/infra/db/battle-queries';
 import { battles } from '@/infra/db/schema';
 import { settleBattle } from '../resolve-battle/resolve-battle';
 import { makeResolveBattleDeps } from '../resolve-battle/settle-deps';
@@ -35,6 +40,7 @@ const ACCEPT_ERROR_LABELS: Record<string, string> = {
   'not-yours': 'This challenge is not addressed to you.',
   'not-pending': 'This challenge is no longer open.',
   'player-busy': 'One of you is already in a battle.',
+  'player-banned': 'One of you is battle-banned right now.',
   'no-problems': 'No approved problems in the bank — tell the operator.',
 };
 
@@ -47,6 +53,7 @@ export async function acceptChallengeAction(battleId: string): Promise<AcceptAct
   const deps: AcceptChallengeDeps = {
     loadChallenge,
     isBusy: userIsInActiveBattle,
+    isBanned: async (userId) => isBattleBanned(await battleBanUntil(userId), new Date()),
     pickProblem: pickRandomApprovedProblem,
     activateBattle: async (id, fields) => {
       const updated = await getDb()

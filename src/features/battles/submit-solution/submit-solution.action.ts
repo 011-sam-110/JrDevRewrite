@@ -9,6 +9,7 @@ import { getJudgeClient } from '@/infra/judge';
 import { notifyBattleSettled } from '@/infra/realtime/notify';
 import type { SubmissionOutcome } from '@/lib/match-events';
 import { settleBattle } from '../resolve-battle/resolve-battle';
+import { runPostMatchScan } from '../resolve-battle/scan-deps';
 import { makeResolveBattleDeps } from '../resolve-battle/settle-deps';
 import { submitSolution, type SubmitSolutionDeps, type SubmitContext } from './submit-solution';
 
@@ -92,6 +93,10 @@ export async function submitSolutionAction(
       if (ack && ack.telemetry.length > 0) {
         await getDb().update(battles).set({ telemetry: ack.telemetry }).where(eq(battles.id, id));
       }
+      // The automatic post-match anti-cheat pass — AFTER the room's telemetry
+      // ack landed, so the cadence/paste heuristics see the full log. Failure-
+      // isolated inside; the settled result above stands whatever happens.
+      if (settled.settled) await runPostMatchScan(id);
     },
 
     now: () => new Date(),

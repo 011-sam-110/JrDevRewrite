@@ -105,7 +105,13 @@ export type BattleEffect =
   | 'notify-void'
   | 'notify-review';
 
-export type ForfeitReason = 'disconnect-grace-expired' | 'quit';
+/**
+ * Why a battle was forfeited. The first two are live-match events; the third
+ * is written by the M16 review slice when an operator UPHOLDS a cheat flag —
+ * the recorded result flips to a forfeit by the cheater (the kernel rule in
+ * sanctions.ts), so 'cheating-confirmed' names that flip in the audit trail.
+ */
+export type ForfeitReason = 'disconnect-grace-expired' | 'quit' | 'cheating-confirmed';
 
 type Ok = { ok: true; battle: BattleSnapshot; effects: BattleEffect[] };
 

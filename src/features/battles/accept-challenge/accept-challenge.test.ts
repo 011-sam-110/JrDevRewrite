@@ -26,6 +26,7 @@ function makeDeps(overrides: Partial<AcceptChallengeDeps> = {}): AcceptChallenge
       timeLimitSeconds: 1800,
     })),
     isBusy: vi.fn(async () => false),
+    isBanned: vi.fn(async () => false),
     pickProblem: vi.fn(async () => ({ problemId: 'prob-1' })),
     activateBattle: vi.fn(async () => 'ok' as const),
     ...overrides,
@@ -75,6 +76,19 @@ describe('acceptChallenge', () => {
     const deps = makeDeps({ isBusy: vi.fn(async (id: string) => id === 'challenger') });
     const result = await acceptChallenge(deps, 'me', 'battle-1', NOW);
     expect(result).toEqual({ ok: false, error: 'player-busy' });
+  });
+
+  it('a banned acceptor cannot start the match (M16 sanction enforcement)', async () => {
+    const deps = makeDeps({ isBanned: vi.fn(async (id: string) => id === 'me') });
+    const result = await acceptChallenge(deps, 'me', 'battle-1', NOW);
+    expect(result).toEqual({ ok: false, error: 'player-banned' });
+    expect(deps.activateBattle).not.toHaveBeenCalled();
+  });
+
+  it('a banned CHALLENGER also blocks the match — a ban closes both seats', async () => {
+    const deps = makeDeps({ isBanned: vi.fn(async (id: string) => id === 'challenger') });
+    const result = await acceptChallenge(deps, 'me', 'battle-1', NOW);
+    expect(result).toEqual({ ok: false, error: 'player-banned' });
   });
 
   it('an empty problem bank refuses the match rather than starting an unplayable battle', async () => {

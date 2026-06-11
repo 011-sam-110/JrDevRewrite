@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { BADGES, badgeStatsFrom, earnedBadgeIds, earnedBadges, type BadgeStats } from './badges';
+import {
+  BADGES,
+  badgeStatsFrom,
+  earnedBadgeIds,
+  earnedBadges,
+  GIANT_KILLER_ELO_GAP,
+  type BadgeStats,
+} from './badges';
 
 /**
  * Badges are unlock rules as DATA + PURE predicates (CLAUDE.md → Gamification).
@@ -16,6 +23,10 @@ const ZERO: BadgeStats = {
   level: 1,
   poolStreak: 0,
   globalRank: 0,
+  battlesPlayed: 0,
+  battleWins: 0,
+  bestBattleWinStreak: 0,
+  giantKills: 0,
 };
 
 describe('BADGES catalogue', () => {
@@ -84,6 +95,10 @@ describe('earnedBadges', () => {
       level: 2,
       poolStreak: 1,
       globalRank: 10,
+      battlesPlayed: 1,
+      battleWins: 0,
+      bestBattleWinStreak: 0,
+      giantKills: 0,
     };
     const strong: BadgeStats = {
       poolsEntered: 9,
@@ -93,6 +108,10 @@ describe('earnedBadges', () => {
       level: 12,
       poolStreak: 7,
       globalRank: 400,
+      battlesPlayed: 20,
+      battleWins: 12,
+      bestBattleWinStreak: 6,
+      giantKills: 2,
     };
     const weakSet = new Set(earnedBadgeIds(weak));
     const strongSet = new Set(earnedBadgeIds(strong));
@@ -103,6 +122,32 @@ describe('earnedBadges', () => {
   it('returns the full badge definitions (name/description/tier), not just ids', () => {
     const [first] = earnedBadges({ ...ZERO, poolsEntered: 1 });
     expect(first).toMatchObject({ id: expect.any(String), name: expect.any(String) });
+  });
+
+  // ------------------------------------------------- battle badges (M16)
+
+  it('first battle win earns First Blood', () => {
+    expect(earnedBadgeIds({ ...ZERO, battleWins: 0 })).not.toContain('first-blood');
+    expect(earnedBadgeIds({ ...ZERO, battlesPlayed: 1, battleWins: 1 })).toContain('first-blood');
+  });
+
+  it('fighting 5 battles earns Battle-Tested — win or lose, showing up counts', () => {
+    expect(earnedBadgeIds({ ...ZERO, battlesPlayed: 4 })).not.toContain('battle-tested');
+    expect(earnedBadgeIds({ ...ZERO, battlesPlayed: 5 })).toContain('battle-tested');
+  });
+
+  it('battle win-streak milestones unlock at 3 and 5 (best EVER, not current)', () => {
+    expect(earnedBadgeIds({ ...ZERO, bestBattleWinStreak: 2 })).not.toContain('rampage');
+    expect(earnedBadgeIds({ ...ZERO, bestBattleWinStreak: 3 })).toContain('rampage');
+    expect(earnedBadgeIds({ ...ZERO, bestBattleWinStreak: 5 })).toContain('untouchable');
+  });
+
+  it('a giant-killer upset earns the badge', () => {
+    expect(earnedBadgeIds({ ...ZERO, giantKills: 1 })).toContain('giant-killer');
+  });
+
+  it('10 battle wins earn Warlord', () => {
+    expect(earnedBadgeIds({ ...ZERO, battlesPlayed: 12, battleWins: 10 })).toContain('warlord');
   });
 });
 
@@ -125,6 +170,10 @@ describe('badgeStatsFrom', () => {
       level: 4,
       poolStreak: 3,
       globalRank: 120,
+      battlesPlayed: 0,
+      battleWins: 0,
+      bestBattleWinStreak: 0,
+      giantKills: 0,
     });
   });
 
@@ -135,5 +184,57 @@ describe('badgeStatsFrom', () => {
     });
     expect(stats.podiums).toBe(0);
     expect(stats.wins).toBe(0);
+  });
+
+  it('folds battle results: plays, wins, best win streak, giant kills', () => {
+    const stats = badgeStatsFrom({
+      profile: { level: 1, poolStreak: 0, globalRank: 0 },
+      results: [],
+      // Chronological: W W L W W W(upset) D — best streak is the trailing 3.
+      battles: [
+        { result: 'win', eloBefore: 1200, opponentEloBefore: 1210 },
+        { result: 'win', eloBefore: 1220, opponentEloBefore: 1200 },
+        { result: 'loss', eloBefore: 1240, opponentEloBefore: 1240 },
+        { result: 'win', eloBefore: 1220, opponentEloBefore: 1250 },
+        { result: 'win', eloBefore: 1240, opponentEloBefore: 1230 },
+        { result: 'win', eloBefore: 1260, opponentEloBefore: 1260 + GIANT_KILLER_ELO_GAP },
+        { result: 'draw', eloBefore: 1290, opponentEloBefore: 1280 },
+      ],
+    });
+    expect(stats.battlesPlayed).toBe(7);
+    expect(stats.battleWins).toBe(5);
+    expect(stats.bestBattleWinStreak).toBe(3);
+    expect(stats.giantKills).toBe(1);
+  });
+
+  it('a giant kill needs BOTH the win and the rating gap (inclusive)', () => {
+    const base = { profile: { level: 1, poolStreak: 0, globalRank: 0 }, results: [] };
+    const losingUp = badgeStatsFrom({
+      ...base,
+      battles: [{ result: 'loss', eloBefore: 1000, opponentEloBefore: 1400 }],
+    });
+    expect(losingUp.giantKills).toBe(0);
+    const justUnder = badgeStatsFrom({
+      ...base,
+      battles: [
+        { result: 'win', eloBefore: 1200, opponentEloBefore: 1200 + GIANT_KILLER_ELO_GAP - 1 },
+      ],
+    });
+    expect(justUnder.giantKills).toBe(0);
+  });
+
+  it('a forfeit or draw breaks a win streak but still counts as played', () => {
+    const stats = badgeStatsFrom({
+      profile: { level: 1, poolStreak: 0, globalRank: 0 },
+      results: [],
+      battles: [
+        { result: 'win', eloBefore: 1200, opponentEloBefore: 1200 },
+        { result: 'win', eloBefore: 1220, opponentEloBefore: 1200 },
+        { result: 'forfeited', eloBefore: 1240, opponentEloBefore: 1200 },
+        { result: 'win', eloBefore: 1220, opponentEloBefore: 1200 },
+      ],
+    });
+    expect(stats.battlesPlayed).toBe(4);
+    expect(stats.bestBattleWinStreak).toBe(2);
   });
 });
