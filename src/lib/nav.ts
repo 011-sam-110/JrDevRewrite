@@ -12,4 +12,5 @@ export const OPERATOR_NAV: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard' },
   { label: 'Pools', href: '/operator/pools' },
   { label: 'Flags', href: '/operator/flags' },
+  { label: 'Problems', href: '/operator/problems' },
 ];

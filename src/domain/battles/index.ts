@@ -39,6 +39,27 @@ export {
   type BattleSubmission,
   type PlayerScore,
 } from './scoring';
+export {
+  approveProblem,
+  BATTLE_LANGUAGES,
+  checkProblemSpec,
+  isBattleLanguage,
+  isPlayable,
+  isProblemTier,
+  MIN_HIDDEN_TESTS,
+  PROBLEM_STATUSES,
+  PROBLEM_TIERS,
+  retireProblem,
+  type ApproveProblemResult,
+  type BattleLanguage,
+  type HiddenTest,
+  type ProblemSpec,
+  type ProblemSpecCheck,
+  type ProblemSpecRejection,
+  type ProblemStatus,
+  type ProblemTier,
+  type RetireProblemResult,
+} from './problems';
 // `wager-settlement` is DELIBERATELY not re-exported: it is Phase 2 domain
 // design (tested now, wired to nothing) and nothing outside its own tests may
 // reference it until wagering ships behind the wallet/KYC/escrow build.

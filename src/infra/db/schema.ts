@@ -22,6 +22,7 @@ import {
   type SimilarityMatch,
 } from '../../domain/prize-pools';
 import type { ProfileVisibility } from '../../domain/gamification';
+import type { BattleLanguage, HiddenTest, ProblemStatus, ProblemTier } from '../../domain/battles';
 
 /** Trivial first table proving the migration pipeline end to end (M0). */
 export const meta = pgTable('meta', {
@@ -327,6 +328,60 @@ export const creditTransactions = pgTable(
   },
   (tx) => [unique('credit_tx_user_pool_reason_unique').on(tx.userId, tx.poolId, tx.reason)],
 );
+
+/**
+ * Battle problem bank (M12) — the bank of solvable problems a live battle is
+ * drawn from. One row per problem, status `draft → approved → retired`
+ * (domain/battles/problems): a draft is awaiting machine verification +
+ * operator approval, approved is playable, retired is rotated out (leaked or
+ * stale, kept for history). The pipeline is "AI-drafted, machine-verified,
+ * human-approved" — a draft reaches `approved` only after its reference
+ * solution passes its own hidden tests in Judge0 AND an operator approves.
+ *
+ * Typed end to end: `tier`/`status`/`referenceLanguage` reuse the kernel's
+ * union types, so a value the kernel doesn't know can't be written; hidden
+ * tests are the jsonb IO pairs the judge feeds (input on stdin, expected on
+ * stdout). `slug` is the durable identifier the seed pipeline dedupes on (the
+ * same role as pool slugs). Problems are LANGUAGE-AGNOSTIC stdin/stdout: one
+ * reference solution (in `referenceLanguage`) verifies the tests; players may
+ * answer in any supported language (M15).
+ */
+export const problems = pgTable('problems', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  slug: text('slug').notNull().unique(),
+  title: text('title').notNull(),
+  /** Full problem statement, markdown. */
+  statementMd: text('statement_md').notNull(),
+  /** Difficulty tier (3 tiers) — the kernel union, distinct from pool difficulty. */
+  tier: text('tier').$type<ProblemTier>().notNull(),
+  status: text('status').$type<ProblemStatus>().notNull().default('draft'),
+  /** Where the draft came from — curated fixture library or the AI drafter. */
+  source: text('source').$type<'curated' | 'ai'>().notNull(),
+  /** Language the reference solution is written in (the kernel union). */
+  referenceLanguage: text('reference_language').$type<BattleLanguage>().notNull(),
+  /** The reference solution source — must pass its own hidden tests to be approvable. */
+  referenceSolution: text('reference_solution').notNull(),
+  /** Hidden tests as IO pairs (input on stdin, expected stdout). */
+  hiddenTests: jsonb('hidden_tests').$type<HiddenTest[]>().notNull(),
+  /**
+   * When the reference solution last passed its own hidden tests (machine
+   * verification). Null until verified; the approve gate requires it set.
+   */
+  verifiedAt: timestamp('verified_at', { withTimezone: true }),
+  /** When an operator approved the draft into the playable bank. */
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+  /**
+   * Operator rejection is archival metadata, not a status (the pools
+   * `rejectedAt` pattern): the row keeps status `draft`, drops out of the draft
+   * queue, and its slug stays claimed so a re-draft can't resurrect it.
+   */
+  rejectedAt: timestamp('rejected_at', { withTimezone: true }),
+  /** When the problem was rotated out of the bank (leaked/stale) — status `retired`. */
+  retiredAt: timestamp('retired_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
 
 /** One-time magic-link tokens (hashed by Auth.js before storage). */
 export const verificationTokens = pgTable(

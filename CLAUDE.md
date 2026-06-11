@@ -95,9 +95,15 @@ npm run pools:scan          # anti-cheat scan: flag duplicate/reused submissions
                             #   review (host cron; safe to re-run — never re-flags reviewed work).
                             #   Review queue: /operator/flags
 
+docker compose up judge0    # local Judge0 code-execution sandbox (untrusted code: internal-only
+                            #   network, no internet, resource-capped; set JUDGE0_URL=http://localhost:2358)
+npm run problems:seed       # seed the battle problem bank through the REAL pipeline (draft →
+                            #   validate → verify reference solutions pass their own hidden tests
+                            #   via Judge0 if up, dev local runner otherwise → approve); idempotent.
+                            #   Review queue: /operator/problems
+
 npm run dev:ws              # (M13) local realtime (WebSocket) service for battles
-docker compose up judge0    # (M12) local Judge0 code-execution sandbox
-npm run db:seed             # (M5+) seed dev data (pools, profiles, badges, problem bank, ratings)
+npm run db:seed             # (M5+) seed dev data (pools, profiles, badges, ratings)
 ```
 
 ## Architecture (target shape)

@@ -1,5 +1,20 @@
 # Local infrastructure for Junior Dev.
-#   db      — PostgreSQL (the only service in M0; judge0 joins in M12).
+#   db      — PostgreSQL (M0). Started by `docker compose up -d db`.
+#   judge0  — code-execution sandbox (M12), under the `judge0` profile so the
+#             default `up` never starts it: `docker compose up judge0`.
+#
+# Judge0 isolation (CLAUDE.md → Stack: "untrusted infra — isolate, resource-cap,
+# network-deny"):
+#   - All judge0 components live on `judge0net`, an INTERNAL network: containers
+#     on it can talk to each other but have NO route to the outside world. The
+#     workers (which execute untrusted submissions) are ONLY on that network, so
+#     submitted code cannot reach the internet — and judge0net can't see the dev
+#     `db` either, so a sandbox escape still can't touch our data.
+#   - Only the API server also joins the default network, purely so the host can
+#     reach the REST API on :2358.
+#   - Every judge0 service is cpu- and memory-capped; isolate adds per-submission
+#     caps on top (and denies network inside the sandbox by default).
+#   - judge0 ≥1.13.1 required for cgroup v2 (Docker Desktop / WSL2).
 services:
   db:
     image: postgres:17-alpine
@@ -18,5 +33,99 @@ services:
       timeout: 3s
       retries: 10
 
+  judge0:
+    image: judge0/judge0:1.13.1
+    container_name: jrdev-judge0
+    profiles: ['judge0']
+    depends_on:
+      - judge0-workers
+      - judge0-db
+      - judge0-redis
+    environment: &judge0-env
+      REDIS_HOST: judge0-redis
+      REDIS_PASSWORD: jrdev-judge0
+      POSTGRES_HOST: judge0-db
+      POSTGRES_DB: judge0
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: jrdev-judge0
+      # Submissions must never get network, and clients may not request it
+      # (the hard "network-deny" requirement). The workers also sit on an
+      # internal-only Docker network, so this is defence in depth.
+      ENABLE_NETWORK: 'false'
+      ALLOW_ENABLE_NETWORK: 'false'
+      # cgroup v2 (Docker Desktop / WSL2): isolate's --cg mode needs cgroup v1
+      # controllers and dies with "Failed to create control group" (surfacing
+      # as Judge0 "Internal Error"). Keeping submissions on per-process/thread
+      # limits makes isolate run WITHOUT --cg — the sandbox itself (namespaces,
+      # rlimits, no network) is unaffected; only the accounting mechanism
+      # changes. (ALLOW_* must stay true or Judge0 rejects even its own default.)
+      ENABLE_PER_PROCESS_AND_THREAD_TIME_LIMIT: 'true'
+      ENABLE_PER_PROCESS_AND_THREAD_MEMORY_LIMIT: 'true'
+      ALLOW_ENABLE_PER_PROCESS_AND_THREAD_TIME_LIMIT: 'true'
+      ALLOW_ENABLE_PER_PROCESS_AND_THREAD_MEMORY_LIMIT: 'true'
+      # Per-submission resource caps (untrusted-infra hardening). With per-thread
+      # memory limiting on, `memory_limit` is each thread's rlimit address space,
+      # so it must clear the JVM's 256MB heap reservation and Node's V8 — 512MB
+      # default lets the whole v1 language set (Python/JS/TS/Java/C++) warm up;
+      # MAX is the hard ceiling a client may request up to. CPU is 5s wall.
+      CPU_TIME_LIMIT: '5'
+      MEMORY_LIMIT: '512000'
+      MAX_MEMORY_LIMIT: '768000'
+    ports:
+      - '2358:2358'
+    privileged: true # isolate (the sandbox) needs cgroup control
+    networks:
+      - default # host access to the REST API only
+      - judge0net
+    cpus: 1
+    mem_limit: 512m
+
+  judge0-workers:
+    image: judge0/judge0:1.13.1
+    container_name: jrdev-judge0-workers
+    profiles: ['judge0']
+    command: ['./scripts/workers']
+    depends_on:
+      - judge0-db
+      - judge0-redis
+    environment: *judge0-env
+    privileged: true
+    networks:
+      - judge0net # internal ONLY — submission code has no internet
+    cpus: 2
+    # Headroom over MAX_MEMORY_LIMIT (768MB) so a worst-case submission plus the
+    # worker process itself fits — a 1g cap left the container pinned at 99%.
+    mem_limit: 2g
+
+  judge0-db:
+    image: postgres:16-alpine
+    container_name: jrdev-judge0-db
+    profiles: ['judge0']
+    environment:
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: jrdev-judge0
+      POSTGRES_DB: judge0
+    volumes:
+      - judge0dbdata:/var/lib/postgresql/data
+    networks:
+      - judge0net
+    cpus: 1
+    mem_limit: 512m
+
+  judge0-redis:
+    image: redis:7-alpine
+    container_name: jrdev-judge0-redis
+    profiles: ['judge0']
+    command: ['redis-server', '--requirepass', 'jrdev-judge0', '--appendonly', 'no']
+    networks:
+      - judge0net
+    cpus: 1
+    mem_limit: 256m
+
+networks:
+  judge0net:
+    internal: true
+
 volumes:
   dbdata:
+  judge0dbdata:
