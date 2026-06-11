@@ -102,7 +102,8 @@ npm run problems:seed       # seed the battle problem bank through the REAL pipe
                             #   via Judge0 if up, dev local runner otherwise → approve); idempotent.
                             #   Review queue: /operator/problems
 
-npm run dev:ws              # (M13) local realtime (WebSocket) service for battles
+npm run dev:ws              # local realtime (WebSocket) service for battles (ws://localhost:3001;
+                            #   REALTIME_PORT to change; seeds a pokeable demo room in dev)
 npm run db:seed             # (M5+) seed dev data (pools, profiles, badges, ratings)
 ```
 

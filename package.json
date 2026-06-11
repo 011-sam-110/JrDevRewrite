@@ -16,6 +16,7 @@
     "pools:tick": "tsx src/features/prize-pools/tick-pools/cli.ts",
     "pools:scan": "tsx src/features/prize-pools/scan-submissions/cli.ts",
     "problems:seed": "tsx src/features/battles/draft-problem/seed.ts",
+    "dev:ws": "tsx src/realtime/dev.ts",
     "email:verify": "tsx src/infra/email/verify.ts"
   },
   "dependencies": {
@@ -29,6 +30,7 @@
     "pg": "^8.21.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "ws": "^8.21.0",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },
@@ -41,6 +43,7 @@
     "@types/pg": "^8.20.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1",
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.39.4",
