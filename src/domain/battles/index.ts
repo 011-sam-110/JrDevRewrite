@@ -1,5 +1,6 @@
 export {
   abortBeforeReveal,
+  ACTIVE_BATTLE_STATUSES,
   BATTLE_STATUSES,
   BATTLE_TRANSITIONS,
   cancelPending,
@@ -30,6 +31,14 @@ export {
   type ResolveResult,
   type TickResult,
 } from './lifecycle';
+export {
+  allowedEloGap,
+  pairQueue,
+  QUEUE_BASE_ELO_GAP,
+  QUEUE_WIDEN_PER_SECOND,
+  type QueuePairing,
+  type QueueTicket,
+} from './matchmaking';
 export {
   DEFAULT_PENALTY_PER_WRONG_SECONDS,
   scoreBattle,

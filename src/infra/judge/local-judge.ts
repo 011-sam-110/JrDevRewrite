@@ -4,10 +4,12 @@
  * the seed/verification pipeline stays machine-checked when the real Judge0
  * container isn't running.
  *
- * NEVER point this at player submissions — it executes code on the host with
- * no sandbox. It is for OUR OWN curated/AI reference solutions during
- * development; battles always go through real Judge0 (M15). The seam gate in
- * index.ts enforces that posture by preferring Judge0 whenever configured.
+ * NEVER point this at player submissions in a deployed environment — it
+ * executes code on the host with no sandbox. It exists for OUR OWN curated/AI
+ * reference solutions during development, and for the hermetic battle e2e on
+ * localhost (the spec types the code itself). The seam gate in index.ts
+ * enforces the posture by preferring Judge0 whenever JUDGE0_URL is set —
+ * which production (M18) always sets.
  */
 
 import { execFile } from 'node:child_process';
@@ -38,9 +40,15 @@ export function normalizeOutput(raw: string): string {
     .replace(/\n+$/, '');
 }
 
-/** Local runtimes we can spawn. Windows ships `python`; node runs this repo. */
+/**
+ * Local runtimes we can spawn. JavaScript uses THIS process's node binary
+ * (`process.execPath`) — a bare `node` PATH lookup breaks under spawned
+ * process trees (e.g. Playwright's webServer) and resolves as a runtime-error
+ * on every test, which reads like a wrong solution. Python stays a PATH
+ * lookup; Windows ships a `python` shim.
+ */
 const LOCAL_RUNTIMES: Partial<Record<JudgeSubmission['language'], { cmd: string; ext: string }>> = {
-  javascript: { cmd: 'node', ext: 'js' },
+  javascript: { cmd: process.execPath, ext: 'js' },
   python: { cmd: 'python', ext: 'py' },
 };
 
@@ -52,13 +60,36 @@ interface ExecOutcome {
   timeSeconds: number | null;
 }
 
+/**
+ * The judged child runs with a sanitized environment: tooling that spawned
+ * OUR server leaks vars that change a child's observable output — Playwright
+ * sets FORCE_COLOR=1, which makes node's console.log wrap non-string values
+ * in ANSI color codes (`[33m3[39m` instead of `3`), turning every
+ * correct solution into a wrong-answer; an inherited NODE_OPTIONS --require
+ * executes arbitrary extra code inside the judged process. The judge must run
+ * the solution and nothing else.
+ */
+function judgedEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  delete env.NODE_OPTIONS;
+  delete env.FORCE_COLOR;
+  delete env.CLICOLOR_FORCE;
+  env.NO_COLOR = '1';
+  return env;
+}
+
 function runOnce(cmd: string, file: string, stdin: string): Promise<ExecOutcome> {
   return new Promise((resolve) => {
     const startedAt = Date.now();
     const child = execFile(
       cmd,
       [file],
-      { timeout: PER_TEST_TIMEOUT_MS, windowsHide: true, maxBuffer: 4 * 1024 * 1024 },
+      {
+        timeout: PER_TEST_TIMEOUT_MS,
+        windowsHide: true,
+        maxBuffer: 4 * 1024 * 1024,
+        env: judgedEnv(),
+      },
       (error, stdout) => {
         const timeSeconds = (Date.now() - startedAt) / 1000;
         if (error) {

@@ -86,7 +86,15 @@ export default async function DashboardPage() {
                 : 'Unranked until your first pool'
             }
           />
-          <StatCard label="Battle Elo" value="—" sub="Battles arrive in Phase C" />
+          <StatCard
+            label="Battle Elo"
+            value={String(profile.elo)}
+            sub={
+              profile.battleGames > 0
+                ? `${profile.battleGames} rated battles`
+                : 'Provisional until your first battle'
+            }
+          />
         </div>
 
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -108,11 +116,14 @@ export default async function DashboardPage() {
             <CardHeader>
               <CardTitle>Code battles</CardTitle>
               <CardDescription>
-                Live 1v1, same problem, first correct solution wins — arrives in Phase C.
+                Live 1v1 — identical problem at the same instant, first fully-correct solution wins.
+                Elo on the line.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Badge variant="outline">Coming soon</Badge>
+              <Link href="/battles">
+                <Button size="sm">Enter the arena</Button>
+              </Link>
             </CardContent>
           </Card>
         </div>

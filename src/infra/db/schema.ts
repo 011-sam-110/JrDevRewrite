@@ -21,8 +21,19 @@ import {
   type PoolStatus,
   type SimilarityMatch,
 } from '../../domain/prize-pools';
-import type { ProfileVisibility } from '../../domain/gamification';
-import type { BattleLanguage, HiddenTest, ProblemStatus, ProblemTier } from '../../domain/battles';
+import { ELO_START, type BattleXpResult, type ProfileVisibility } from '../../domain/gamification';
+import {
+  DEFAULT_TIME_LIMIT_SECONDS,
+  type BattleLanguage,
+  type BattleOutcome,
+  type BattleStatus,
+  type ForfeitReason,
+  type HiddenTest,
+  type PlayerSide,
+  type ProblemStatus,
+  type ProblemTier,
+} from '../../domain/battles';
+import type { MatchTelemetryRecord } from '../../lib/match-events';
 
 /** Trivial first table proving the migration pipeline end to end (M0). */
 export const meta = pgTable('meta', {
@@ -114,6 +125,17 @@ export const profiles = pgTable('profiles', {
   visibility: text('visibility').$type<ProfileVisibility>().notNull().default('public'),
   /** Free pool-entry credits; grant/debit policy lands with M5's join slice. */
   credits: integer('credits').notNull().default(0),
+  /**
+   * Battle Elo (M15) — the SEPARATE, can-go-down rating (pool rank is purely
+   * additive by design). Moves only through the resolve-battle slice applying
+   * the kernel's `applyBattleElo`; `battleGames` feeds the provisional
+   * K-factor; `battleStreak` is the battle participation streak.
+   */
+  elo: integer('elo').notNull().default(ELO_START),
+  battleGames: integer('battle_games').notNull().default(0),
+  battleStreak: integer('battle_streak').notNull().default(0),
+  /** Presence heartbeat (M15) — touched by the battles lobby; "online" is recency. */
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -381,6 +403,122 @@ export const problems = pgTable('problems', {
   /** When the problem was rotated out of the bank (leaked/stale) — status `retired`. */
   retiredAt: timestamp('retired_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+/*
+ * Live Code Battles (M15) — battles/submissions/results/queue persist the M11
+ * kernel's world. The DB row is the AUTHORITATIVE record: the realtime room is
+ * an in-memory mirror loaded from here on first join, and every settlement
+ * lands here through the resolve-battle slice before anything is broadcast.
+ */
+
+/**
+ * One 1v1 battle. Status mirrors the kernel union; mid-flight transitions
+ * (countdown/live + goAt) are written by the realtime effects executor so a
+ * restarted service can rebuild the room, and the settled fields (winnerSide/
+ * outcome/forfeitReason/resolvedAt) are written exactly once by the
+ * resolve-battle slice — its conditional status UPDATE is the idempotency
+ * lock (first settler wins; everyone else sees 0 rows and stands down).
+ */
+export const battles = pgTable('battles', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  status: text('status').$type<BattleStatus>().notNull().default('challenged'),
+  /** Which entry path made it — an accepted challenge or the queue pairing. */
+  source: text('source').$type<'challenge' | 'queue'>().notNull(),
+  /** Seat a = the challenger / longer-waiting queue ticket; fixed for life. */
+  playerAId: text('player_a_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  playerBId: text('player_b_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  /** Drawn from the approved bank at the matched transition; null while pending. */
+  problemId: text('problem_id').references(() => problems.id, { onDelete: 'set null' }),
+  timeLimitSeconds: integer('time_limit_seconds').notNull().default(DEFAULT_TIME_LIMIT_SECONDS),
+  /** Kernel-stamped instants — null until their transition happens. */
+  readyDeadline: timestamp('ready_deadline', { withTimezone: true }),
+  goAt: timestamp('go_at', { withTimezone: true }),
+  /** Settled outcome: which seat won (null = draw, void, or not yet settled). */
+  winnerSide: text('winner_side').$type<PlayerSide>(),
+  /** How a `resolved` battle concluded (the scoring kernel's outcome kind). */
+  outcome: text('outcome').$type<BattleOutcome['kind']>(),
+  forfeitReason: text('forfeit_reason').$type<ForfeitReason>(),
+  /** The room's server-stamped anti-cheat log, persisted at settlement (M16 reads). */
+  telemetry: jsonb('telemetry').$type<MatchTelemetryRecord[]>().notNull().default([]),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  matchedAt: timestamp('matched_at', { withTimezone: true }),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+});
+
+/**
+ * Every judged submission, kept in full (CLAUDE.md → battle anti-cheat:
+ * "full submission history retained") — the scoring kernel's input, the M16
+ * plagiarism-diff corpus, and the audit trail behind a decisive win.
+ * `atSeconds` is seconds-from-go as the slice stamped it server-side.
+ */
+export const battleSubmissions = pgTable('battle_submissions', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  battleId: text('battle_id')
+    .notNull()
+    .references(() => battles.id, { onDelete: 'cascade' }),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  side: text('side').$type<PlayerSide>().notNull(),
+  language: text('language').$type<BattleLanguage>().notNull(),
+  code: text('code').notNull(),
+  atSeconds: integer('at_seconds').notNull(),
+  testsPassed: integer('tests_passed').notNull(),
+  testsTotal: integer('tests_total').notNull(),
+  passedAll: boolean('passed_all').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * Per-player settled outcome — the battle twin of `pool_results`: one row per
+ * player written atomically at settlement, unique (battle, user) as the
+ * idempotency lock, and the audit trail for every Elo/XP/streak movement
+ * (eloBefore/eloAfter pin exactly what `applyBattleElo` did). Voided battles
+ * write NO rows — nothing happened, nothing is rated (binding).
+ */
+export const battleResults = pgTable(
+  'battle_results',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    battleId: text('battle_id')
+      .notNull()
+      .references(() => battles.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    side: text('side').$type<PlayerSide>().notNull(),
+    result: text('result').$type<BattleXpResult>().notNull(),
+    eloBefore: integer('elo_before').notNull(),
+    eloAfter: integer('elo_after').notNull(),
+    xpAwarded: integer('xp_awarded').notNull(),
+    streakAfter: integer('streak_after').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (r) => [unique('battle_results_battle_user_unique').on(r.battleId, r.userId)],
+);
+
+/**
+ * The battle queue — one row per waiting player (PK = at most one ticket
+ * each). The matchmaking tick in the realtime service reads these, runs the
+ * pure `pairQueue`, and deletes paired rows in the same transaction that
+ * creates their battle. Elo is read fresh from profiles at pairing time.
+ */
+export const battleQueue = pgTable('battle_queue', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  enqueuedAt: timestamp('enqueued_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
 /** One-time magic-link tokens (hashed by Auth.js before storage). */

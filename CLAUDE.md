@@ -103,7 +103,9 @@ npm run problems:seed       # seed the battle problem bank through the REAL pipe
                             #   Review queue: /operator/problems
 
 npm run dev:ws              # local realtime (WebSocket) service for battles (ws://localhost:3001;
-                            #   REALTIME_PORT to change; seeds a pokeable demo room in dev)
+                            #   REALTIME_PORT to change; seeds a pokeable demo room in dev; also
+                            #   runs the queue-matchmaking tick and serves /healthz + the internal
+                            #   battle-settled poke on the same port)
 npm run db:seed             # (M5+) seed dev data (pools, profiles, badges, ratings)
 ```
 

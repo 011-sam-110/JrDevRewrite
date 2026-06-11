@@ -15,7 +15,13 @@
  * `ProblemTier`) — typed end to end, the same rule as the DB schema.
  */
 
-import type { BattleStatus, ForfeitReason, PlayerSide, ProblemTier } from '@/domain/battles';
+import type {
+  BattleLanguage,
+  BattleStatus,
+  ForfeitReason,
+  PlayerSide,
+  ProblemTier,
+} from '@/domain/battles';
 
 /** What the opponent-facing reveal carries — no reference solution, no tests. */
 export interface RevealedProblem {
@@ -41,6 +47,33 @@ export type TelemetryKind = (typeof TELEMETRY_KINDS)[number];
 export function isTelemetryKind(value: unknown): value is TelemetryKind {
   return typeof value === 'string' && (TELEMETRY_KINDS as readonly string[]).includes(value);
 }
+
+/**
+ * One captured anti-cheat signal as the room records it. `atSeconds` is
+ * stamped by the SERVER clock relative to the go — the client only ever names
+ * the kind. Lives in the shared contract (not `realtime/`) because the M15
+ * settle slice persists the log with the result and M16's pure predicates
+ * read it post-match — neither may import the transport layer.
+ */
+export interface MatchTelemetryRecord {
+  side: PlayerSide;
+  kind: TelemetryKind;
+  atSeconds: number;
+}
+
+/**
+ * The submission seam between the arena and the judge path — NOT a WS frame
+ * (submissions travel over a server action so the submitter gets a verdict
+ * reply), but part of the same shared contract: the arena renders whatever
+ * shape the submit-solution slice returns.
+ */
+export interface SubmissionOutcome {
+  status: 'accepted' | 'rejected' | 'error';
+  testsPassed: number;
+  testsTotal: number;
+}
+
+export type SubmitSolution = (code: string, language: BattleLanguage) => Promise<SubmissionOutcome>;
 
 export type ClientEvent =
   | { type: 'hello'; token: string }

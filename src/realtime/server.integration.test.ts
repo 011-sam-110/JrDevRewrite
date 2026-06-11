@@ -187,3 +187,129 @@ describe('the synchronized go over real sockets', () => {
     socket.close();
   });
 });
+
+/* ------------------------------------------- M15: HTTP surface + lazy rooms */
+
+describe('the internal HTTP surface', () => {
+  it('serves /healthz on the same port as the WS upgrade', async () => {
+    const res = await fetch(`http://127.0.0.1:${server.port}/healthz`);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe('ok');
+  });
+
+  it('404s anything else', async () => {
+    const res = await fetch(`http://127.0.0.1:${server.port}/internal/unknown`);
+    expect(res.status).toBe(404);
+  });
+
+  it(
+    'a settled poke resolves a live room, broadcasts the winner, and replies with telemetry',
+    { timeout: 20_000 },
+    async () => {
+      server.registry.create(
+        { battleId: 'poke-1', players: { a: 'p-a', b: 'p-b' }, battle: matchedBattle(new Date()) },
+        PROBLEM,
+      );
+      const a = await TestSocket.connect(server.port);
+      const b = await TestSocket.connect(server.port);
+      a.send({ type: 'hello', token: 'dev:p-a' });
+      b.send({ type: 'hello', token: 'dev:p-b' });
+      await Promise.all([a.next('hello-ok'), b.next('hello-ok')]);
+      a.send({ type: 'join', battleId: 'poke-1' });
+      b.send({ type: 'join', battleId: 'poke-1' });
+      await Promise.all([a.next('room-state'), b.next('room-state')]);
+      a.send({ type: 'ready' });
+      b.send({ type: 'ready' });
+      await Promise.all([a.next('go'), b.next('go')]); // live
+
+      a.send({ type: 'telemetry', kind: 'paste-blocked' });
+      // Telemetry is fire-and-forget; give the frame a beat to land.
+      await new Promise((r) => setTimeout(r, 200));
+
+      const res = await fetch(`http://127.0.0.1:${server.port}/internal/battles/poke-1/settled`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ winner: 'a' }),
+      });
+      expect(res.status).toBe(200);
+      const ack = (await res.json()) as { telemetry: { kind: string; side: string }[] };
+      expect(ack.telemetry).toEqual([
+        { side: 'a', kind: 'paste-blocked', atSeconds: expect.any(Number) as number },
+      ]);
+
+      const [sA, sB] = await Promise.all([a.next('battle-status'), b.next('battle-status')]);
+      expect(sA.event).toEqual({
+        type: 'battle-status',
+        status: 'resolved',
+        winner: 'a',
+        reason: null,
+      });
+      expect(sB.event).toEqual(sA.event);
+
+      a.close();
+      b.close();
+    },
+  );
+});
+
+describe('lazy room materialization', () => {
+  it('an unknown battle loads ONCE through the roomSource even under a simultaneous join', async () => {
+    let calls = 0;
+    const lazy = await startRealtimeServer({
+      port: 0,
+      authenticator: new DevTokenAuthenticator(),
+      roomSource: async (battleId) => {
+        calls++;
+        await new Promise((r) => setTimeout(r, 50)); // widen the race window
+        return {
+          config: {
+            battleId,
+            players: { a: 'lz-a', b: 'lz-b' },
+            battle: matchedBattle(new Date()),
+          },
+          problem: PROBLEM,
+        };
+      },
+    });
+    try {
+      const a = await TestSocket.connect(lazy.port);
+      const b = await TestSocket.connect(lazy.port);
+      a.send({ type: 'hello', token: 'dev:lz-a' });
+      b.send({ type: 'hello', token: 'dev:lz-b' });
+      await Promise.all([a.next('hello-ok'), b.next('hello-ok')]);
+
+      a.send({ type: 'join', battleId: 'lazy-1' });
+      b.send({ type: 'join', battleId: 'lazy-1' });
+      const [stateA, stateB] = await Promise.all([a.next('room-state'), b.next('room-state')]);
+
+      expect(calls).toBe(1); // one load, one room — not a room per joiner
+      expect(stateA.event.side).toBe('a');
+      expect(stateB.event.side).toBe('b');
+      expect(lazy.registry.get('lazy-1')).toBeDefined();
+
+      a.close();
+      b.close();
+    } finally {
+      await lazy.close();
+    }
+  });
+
+  it('a battle the source does not know stays unknown', async () => {
+    const lazy = await startRealtimeServer({
+      port: 0,
+      authenticator: new DevTokenAuthenticator(),
+      roomSource: async () => null,
+    });
+    try {
+      const a = await TestSocket.connect(lazy.port);
+      a.send({ type: 'hello', token: 'dev:lz-a' });
+      await a.next('hello-ok');
+      a.send({ type: 'join', battleId: 'missing' });
+      const err = await a.next('error');
+      expect(err.event.code).toBe('unknown-battle');
+      a.close();
+    } finally {
+      await lazy.close();
+    }
+  });
+});

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   abortBeforeReveal,
+  ACTIVE_BATTLE_STATUSES,
   BATTLE_STATUSES,
   BATTLE_TRANSITIONS,
   cancelPending,
@@ -385,5 +386,21 @@ describe('invariant: a void NEVER touches ratings or results', () => {
 
     expect(voidEffects).not.toContain('apply-ratings');
     expect(voidEffects).not.toContain('record-result');
+  });
+});
+
+describe('ACTIVE_BATTLE_STATUSES', () => {
+  // The slice-level "one battle at a time" guard reads this set (the
+  // ACTIVE_POOL_STATUSES pattern): a battle in motion blocks a new one, but a
+  // pending challenge/queue ticket is an invitation, not a commitment.
+  it('covers exactly the in-motion statuses', () => {
+    expect([...ACTIVE_BATTLE_STATUSES].sort()).toEqual(['countdown', 'live', 'matched']);
+  });
+
+  it('never contains a settled or pending status', () => {
+    const active: readonly BattleStatus[] = ACTIVE_BATTLE_STATUSES;
+    for (const status of ['challenged', 'queued', 'resolved', 'voided', 'forfeited', 'flagged']) {
+      expect(active).not.toContain(status);
+    }
   });
 });

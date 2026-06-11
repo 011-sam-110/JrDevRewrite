@@ -17,6 +17,7 @@ import {
   type ArenaState,
 } from './arena-state';
 import { CodeEditor, LANGUAGE_LABELS } from './CodeEditor';
+import { submitSolutionAction } from '../submit-solution/submit-solution.action';
 import { connectArenaSocket, type ArenaDriver } from './connection';
 import { createMockArena, type MockOpponentControls } from './mock-room';
 import type { FeedItem, SubmitSolution } from './types';
@@ -31,7 +32,14 @@ import type { FeedItem, SubmitSolution } from './types';
 
 export type ArenaProps =
   | { mode: 'mock'; battleId: string }
-  | { mode: 'ws'; battleId: string; url: string; token: string };
+  | {
+      mode: 'ws';
+      battleId: string;
+      url: string;
+      token: string;
+      /** Wire submissions to the real submit-solution action (M15). */
+      serverSubmit?: boolean;
+    };
 
 export function Arena(props: ArenaProps) {
   const [state, dispatch] = useReducer(reduceArena, undefined, initialArenaState);
@@ -57,7 +65,11 @@ export function Arena(props: ArenaProps) {
       onEvent: dispatch,
     });
     driverRef.current = driver;
-    submitRef.current = null; // the real judge path lands with M15's submit-solution slice
+    // The real judge path: cooldown → Judge0 → verdict, all server-side. The
+    // dev demo room has no battle row, so it stays read-only (null).
+    submitRef.current = props.serverSubmit
+      ? (code, language) => submitSolutionAction(props.battleId, code, language)
+      : null;
     return () => driver.close();
     // The connection params are fixed for the page's lifetime.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -219,6 +231,9 @@ export function Arena(props: ArenaProps) {
             headline={result.headline}
             detail={result.detail}
             feed={feed}
+            recordHref={
+              props.mode === 'ws' && props.serverSubmit ? `/battles/${props.battleId}` : null
+            }
           />
         )}
       </main>
@@ -515,11 +530,14 @@ function Settled({
   headline,
   detail,
   feed,
+  recordHref,
 }: {
   tone: 'won' | 'lost' | 'draw' | 'void';
   headline: string;
   detail: string | null;
   feed: FeedItem[];
+  /** Full-page link to the server-rendered match record (Elo movement). */
+  recordHref?: string | null;
 }) {
   const toneClass =
     tone === 'won' ? 'text-volt text-glow' : tone === 'lost' ? 'text-danger' : 'text-fg-muted';
@@ -535,9 +553,18 @@ function Settled({
         <p className="text-sm text-fg-muted">Elo and XP land with the match record.</p>
       )}
       {feed.length > 0 && <VerdictFeed feed={feed} />}
-      <Link href="/dashboard">
-        <Button variant="secondary">Back to dashboard</Button>
-      </Link>
+      <div className="flex items-center gap-3">
+        {recordHref && (
+          // A full navigation on purpose: the server re-renders this route as
+          // the match record (Elo movement) once the battle row is settled.
+          <a href={recordHref} data-testid="view-match-record">
+            <Button>View match record</Button>
+          </a>
+        )}
+        <Link href="/dashboard">
+          <Button variant="secondary">Back to dashboard</Button>
+        </Link>
+      </div>
     </section>
   );
 }

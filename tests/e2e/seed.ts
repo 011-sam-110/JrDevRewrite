@@ -401,3 +401,45 @@ export async function addSubmittedEntry(
     await db.end();
   }
 }
+
+/**
+ * The battle e2e's known problem: a fixed slug the dev server is told to pick
+ * (E2E_FORCE_PROBLEM_SLUG in playwright.config), upserted as APPROVED so the
+ * spec can type a known-correct solution. Idempotent across runs.
+ */
+export const E2E_PROBLEM_SLUG = 'e2e-sum-two-integers';
+
+export async function seedApprovedProblem(): Promise<{ id: string; title: string }> {
+  const db = new Pool({ connectionString: process.env.DATABASE_URL });
+  const id = randomUUID();
+  const title = 'E2E Sum of Two Integers';
+  const tests = [
+    { input: '1 2\n', expectedOutput: '3\n' },
+    { input: '5 5\n', expectedOutput: '10\n' },
+    { input: '0 0\n', expectedOutput: '0\n' },
+  ];
+  try {
+    const result = await db.query(
+      `insert into problems (
+         id, slug, title, statement_md, tier, status, source,
+         reference_language, reference_solution, hidden_tests,
+         verified_at, approved_at
+       ) values ($1, $2, $3, $4, 'easy', 'approved', 'curated',
+                 'javascript', $5, $6, now(), now())
+       on conflict (slug) do update
+         set status = 'approved', retired_at = null, approved_at = now()
+       returning id`,
+      [
+        id,
+        E2E_PROBLEM_SLUG,
+        title,
+        'Read two space-separated integers `a` and `b` on one line. Print their sum.',
+        "const [a,b]=require('fs').readFileSync(0,'utf8').trim().split(/\\s+/).map(Number);console.log(a+b)",
+        JSON.stringify(tests),
+      ],
+    );
+    return { id: (result.rows[0] as { id: string }).id, title };
+  } finally {
+    await db.end();
+  }
+}

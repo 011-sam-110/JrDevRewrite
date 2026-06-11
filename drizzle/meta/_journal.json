@@ -71,6 +71,13 @@
       "when": 1781140309424,
       "tag": "0009_nebulous_master_chief",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1781189724009,
+      "tag": "0010_calm_ghost_rider",
+      "breakpoints": true
     }
   ]
 }

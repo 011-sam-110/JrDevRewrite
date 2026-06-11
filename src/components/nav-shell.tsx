@@ -27,7 +27,15 @@ export function AppShell({
       <header className="sticky top-0 z-40 border-b border-edge-subtle bg-bg/85 backdrop-blur">
         <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-6 px-4 md:px-6">
           <Logo />
-          <nav aria-label="Primary" className="flex items-center gap-1 overflow-x-auto">
+          {/* The nav stretches to the full header height and the active
+              underline sits at ITS bottom edge (= the header border). Hanging
+              the underline below the box (the old -bottom-[13px]) made the
+              overflow-x-auto container vertically scrollable, which rendered
+              a phantom scrollbar nub on Windows. */}
+          <nav
+            aria-label="Primary"
+            className="flex h-14 items-stretch gap-1 self-stretch overflow-x-auto overflow-y-hidden"
+          >
             {items.map((item) => {
               const active = currentPath === item.href;
               return (
@@ -36,7 +44,7 @@ export function AppShell({
                   href={item.href}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'relative rounded-sm px-3 py-2 text-xs font-semibold tracking-widest uppercase transition-colors',
+                    'relative flex items-center rounded-sm px-3 text-xs font-semibold tracking-widest whitespace-nowrap uppercase transition-colors',
                     active ? 'text-volt' : 'text-fg-muted hover:bg-raised hover:text-fg',
                   )}
                 >
@@ -44,7 +52,7 @@ export function AppShell({
                   {active && (
                     <span
                       aria-hidden="true"
-                      className="absolute inset-x-3 -bottom-[13px] h-0.5 bg-volt shadow-glow"
+                      className="absolute inset-x-3 bottom-0 h-0.5 bg-volt shadow-glow"
                     />
                   )}
                 </Link>

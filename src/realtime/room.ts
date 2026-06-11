@@ -25,6 +25,7 @@ import {
   liveDeadline,
   markReady,
   opponentOf,
+  resolveDecisive,
   tickBattle,
   type BattleEffect,
   type BattleSnapshot,
@@ -33,6 +34,7 @@ import {
 } from '@/domain/battles';
 import type {
   MatchErrorCode,
+  MatchTelemetryRecord,
   RevealedProblem,
   RoomStateEvent,
   ServerEvent,
@@ -40,17 +42,9 @@ import type {
   TelemetryKind,
 } from '@/lib/match-events';
 
-/**
- * One captured anti-cheat signal. `atSeconds` is stamped by the SERVER clock
- * relative to the go — the client only ever names the kind (its clock is
- * untrusted, the same posture as GitHub commit timestamps). M15 persists this
- * log with the result; M16's pure predicates read it post-match.
- */
-export interface MatchTelemetryRecord {
-  side: PlayerSide;
-  kind: TelemetryKind;
-  atSeconds: number;
-}
+// Re-exported from the shared contract (moved there in M15 so the settle
+// slice and the DB schema can name the shape without importing transport).
+export type { MatchTelemetryRecord } from '@/lib/match-events';
 
 /** How often the server re-syncs its authoritative remaining time while live. */
 export const TIMER_SYNC_SECONDS = 10;
@@ -69,6 +63,14 @@ export interface RoomConfig {
   battle: BattleSnapshot;
 }
 
+/** What the room KNOWS about a settlement it produced — a forfeit's winner
+ * and reason. Scored outcomes (timeout winner) are never the room's to know:
+ * the executor runs the scoring kernel over the persisted history. */
+export interface RoomOutcome {
+  winner: PlayerSide | null;
+  reason: ForfeitReason | null;
+}
+
 export interface RoomDeps {
   now(): Date;
   /** Run `fn` at `when`; returns a cancel. The server backs this with setTimeout. */
@@ -78,9 +80,10 @@ export interface RoomDeps {
    * Transport effects (start-countdown, reveal-problem, start-match-timer)
    * are also acted on by the room itself; result effects (record-result,
    * apply-ratings, notify-*) are the M15 slices' job — the room never
-   * interprets them.
+   * interprets them. `outcome` rides along when the room knows it (forfeits);
+   * a time-limit resolve carries none, because scoring is not transport.
    */
-  onEffects(effects: BattleEffect[], battle: BattleSnapshot): void;
+  onEffects(effects: BattleEffect[], battle: BattleSnapshot, outcome?: RoomOutcome): void;
 }
 
 const KERNEL_ERROR_CODES: Record<string, MatchErrorCode> = {
@@ -234,6 +237,27 @@ export class BattleRoom {
     return this.telemetry_;
   }
 
+  /**
+   * The AUTHORITY already settled this battle (the submit-solution slice
+   * claimed the row in the DB) — bring the room's mirror along and tell both
+   * clients. Still a kernel move (`resolveDecisive`), but its effects are NOT
+   * forwarded: the slice that called us already executed record-result and
+   * apply-ratings, and re-forwarding would double-settle. Also the timeout
+   * follow-up: when the room resolved unscored (winner null) and the executor
+   * has since computed the real outcome, this re-announces it.
+   */
+  settleFromAuthority(winner: PlayerSide | null): void {
+    if (this.battleState.status === 'live') {
+      const result = resolveDecisive(this.battleState);
+      if (!result.ok) return;
+      this.battleState = result.battle;
+      this.announceSettled(winner, null);
+      return;
+    }
+    if (this.isSettled) this.announceSettled(winner, null);
+    // Pre-reveal states ignore the poke: nothing live can have been decided.
+  }
+
   /* --------------------------------------------------------------- the clocks */
 
   /** Schedule the next time-driven kernel edge for the current status. */
@@ -314,7 +338,7 @@ export class BattleRoom {
     reason: ForfeitReason | null = null,
   ): void {
     this.battleState = battle;
-    this.forwardEffects(effects);
+    this.forwardEffects(effects, winner !== null ? { winner, reason } : undefined);
     this.announceSettled(winner, reason);
   }
 
@@ -326,8 +350,8 @@ export class BattleRoom {
     this.clearClock();
   }
 
-  private forwardEffects(effects: BattleEffect[]): void {
-    if (effects.length > 0) this.deps.onEffects(effects, this.battleState);
+  private forwardEffects(effects: BattleEffect[], outcome?: RoomOutcome): void {
+    if (effects.length > 0) this.deps.onEffects(effects, this.battleState, outcome);
   }
 
   private clearClock(): void {

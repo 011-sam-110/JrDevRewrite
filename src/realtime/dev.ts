@@ -2,13 +2,15 @@
  * `npm run dev:ws` — the local realtime service. Listens on REALTIME_PORT
  * (default 3001), accepts BOTH `dev:<userId>` tokens (the WS twin of
  * /dev/login; non-production only) and real Auth.js session tokens (what the
- * M14 arena client sends), and seeds one demo room so the service is
- * immediately pokeable:
+ * arena client sends).
  *
- *   battleId 'demo', players dev-a / dev-b. From two terminals or a browser
- *   console: connect, {"type":"hello","token":"dev:dev-a"}, {"type":"join",
- *   "battleId":"demo"}, {"type":"ready"} — when both seats are ready, both
- *   sockets receive the synchronized countdown and go.
+ * M15 wiring: rooms materialize lazily from the battles table (dbRoomSource)
+ * with the resolve-battle slice as the effects executor, and the matchmaking
+ * tick (match-queue slice) runs here on a short interval — CLAUDE.md pins
+ * matchmaking to the realtime service, not cron.
+ *
+ * The seeded demo room survives for poking the transport without a DB:
+ * battleId 'demo', players dev-a / dev-b (tokens dev:dev-a, dev:dev-b).
  *
  * Thin entry point: wiring only. Relative imports so tsx runs it without
  * path-alias config (the cli.ts house pattern).
@@ -16,9 +18,14 @@
 
 import 'dotenv/config';
 import { matchBattle, DEFAULT_TIME_LIMIT_SECONDS } from '../domain/battles';
+import { matchQueue } from '../features/battles/match-queue/match-queue';
+import { makeMatchQueueDeps } from '../features/battles/match-queue/match-queue-deps';
 import type { RevealedProblem } from '../lib/match-events';
 import { DbSessionAuthenticator, DevTokenAuthenticator, type Authenticator } from './auth';
-import { startRealtimeServer } from './server';
+import { dbRoomSource } from './room-source';
+import { RoomRegistry, startRealtimeServer } from './server';
+
+const MATCHMAKING_TICK_MS = 3000;
 
 /** Dev tokens first (cheap, no DB); real session tokens otherwise. */
 class DevComposite implements Authenticator {
@@ -46,11 +53,32 @@ const DEMO_PROBLEM: RevealedProblem = {
 
 async function main(): Promise<void> {
   const port = Number(process.env.REALTIME_PORT ?? 3001);
+  const log = (line: string) => console.log(line);
+  const registry = new RoomRegistry();
+
   const server = await startRealtimeServer({
     port,
     authenticator: new DevComposite(),
-    log: (line) => console.log(line),
+    registry,
+    roomSource: dbRoomSource(registry, log),
+    log,
   });
+
+  // The matchmaking tick — pairing decisions are the pure kernel's; this loop
+  // only provides the clock. Guarded against overlap; DB-down ticks just log.
+  let pairing = false;
+  setInterval(() => {
+    if (pairing) return;
+    pairing = true;
+    matchQueue(makeMatchQueueDeps())
+      .then(({ created }) => {
+        if (created > 0) log(`matchmaking: paired ${created} battle(s)`);
+      })
+      .catch((err: unknown) => log(`matchmaking tick failed: ${String(err)}`))
+      .finally(() => {
+        pairing = false;
+      });
+  }, MATCHMAKING_TICK_MS);
 
   const matched = matchBattle(
     {

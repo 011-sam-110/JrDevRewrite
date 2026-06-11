@@ -8,7 +8,7 @@ import {
   type BattleSnapshot,
 } from '@/domain/battles';
 import type { RevealedProblem, ServerEvent } from '@/lib/match-events';
-import { BattleRoom, TIMER_SYNC_SECONDS, type RoomDeps } from './room';
+import { BattleRoom, TIMER_SYNC_SECONDS, type RoomDeps, type RoomOutcome } from './room';
 
 /* ------------------------------------------------------------------ harness */
 
@@ -34,7 +34,9 @@ function makeWorld() {
   }
   const jobs: Job[] = [];
 
-  const deps: RoomDeps & { effects: { effects: BattleEffect[]; battle: BattleSnapshot }[] } = {
+  const deps: RoomDeps & {
+    effects: { effects: BattleEffect[]; battle: BattleSnapshot; outcome?: RoomOutcome }[];
+  } = {
     effects: [],
     now: () => clock.now,
     schedule: (when, fn) => {
@@ -44,8 +46,8 @@ function makeWorld() {
         job.cancelled = true;
       };
     },
-    onEffects: (effects, battle) => {
-      deps.effects.push({ effects, battle });
+    onEffects: (effects, battle, outcome) => {
+      deps.effects.push({ effects, battle, ...(outcome ? { outcome } : {}) });
     },
   };
 
@@ -447,5 +449,96 @@ describe('in-match anti-cheat telemetry', () => {
     w.room.recordTelemetry('user-x', 'paste-blocked');
 
     expect(w.room.telemetryLog).toEqual([]);
+  });
+});
+
+/* -------------------------------------------- M15: outcome-carrying effects */
+
+describe('effects carry the outcome for the executor', () => {
+  it('a quit forfeit forwards winner + reason alongside the effects', () => {
+    const w = makeRoom();
+    toLive(w);
+
+    w.room.quit('user-a');
+
+    const last = w.deps.effects[w.deps.effects.length - 1]!;
+    expect(last.effects).toEqual(['record-result', 'apply-ratings']);
+    expect(last.outcome).toEqual({ winner: 'b', reason: 'quit' });
+  });
+
+  it('a grace-expiry forfeit names the reason', () => {
+    const w = makeRoom();
+    toLive(w);
+
+    w.room.disconnect('user-b');
+    w.advanceTo(at(COUNTDOWN_SECONDS + DISCONNECT_GRACE_SECONDS));
+
+    const last = w.deps.effects[w.deps.effects.length - 1]!;
+    expect(last.outcome).toEqual({ winner: 'a', reason: 'disconnect-grace-expired' });
+  });
+
+  it('a time-limit resolve carries NO outcome — scoring over submissions is the slice job', () => {
+    const w = makeRoom();
+    toLive(w);
+
+    w.advanceTo(at(COUNTDOWN_SECONDS + PROBLEM.timeLimitSeconds));
+
+    const last = w.deps.effects[w.deps.effects.length - 1]!;
+    expect(last.effects).toEqual(['record-result', 'apply-ratings']);
+    expect(last.outcome).toBeUndefined();
+  });
+});
+
+describe('settleFromAuthority — the slice-settled decisive path', () => {
+  it('transitions live to resolved via the kernel and broadcasts the winner WITHOUT forwarding effects', () => {
+    const w = makeRoom();
+    toLive(w);
+    const effectsBefore = w.deps.effects.length;
+
+    w.room.settleFromAuthority('b');
+
+    expect(w.room.battle.status).toBe('resolved');
+    // The authority (resolve-battle) already executed record-result and
+    // apply-ratings — re-forwarding would double-settle.
+    expect(w.deps.effects).toHaveLength(effectsBefore);
+    const announced = { type: 'battle-status', status: 'resolved', winner: 'b', reason: null };
+    expect(w.a.of('battle-status').at(-1)).toEqual(announced);
+    expect(w.b.of('battle-status').at(-1)).toEqual(announced);
+  });
+
+  it('re-announces the computed winner when the room already settled (the timeout follow-up)', () => {
+    const w = makeRoom();
+    toLive(w);
+    w.advanceTo(at(COUNTDOWN_SECONDS + PROBLEM.timeLimitSeconds));
+    expect(w.room.battle.status).toBe('resolved');
+    expect(w.a.of('battle-status').at(-1)!.winner).toBeNull(); // transport announced, unscored
+
+    w.room.settleFromAuthority('a');
+
+    expect(w.a.of('battle-status').at(-1)!.winner).toBe('a');
+    expect(w.b.of('battle-status').at(-1)!.winner).toBe('a');
+  });
+
+  it('cannot settle a lobby — before the reveal a poke does nothing', () => {
+    const w = makeRoom();
+    w.room.join(w.a.conn);
+
+    w.room.settleFromAuthority('a');
+
+    expect(w.room.battle.status).toBe('matched');
+    expect(w.a.of('battle-status')).toHaveLength(0);
+  });
+});
+
+describe('WS frames decide nothing (binding: the judge verdict is authoritative)', () => {
+  it('a progress claim of any size changes no status and mandates no result', () => {
+    const w = makeRoom();
+    toLive(w);
+
+    w.room.progress('user-a', 999);
+
+    expect(w.room.battle.status).toBe('live');
+    expect(w.deps.effects.flatMap((e) => e.effects)).not.toContain('record-result');
+    expect(w.deps.effects.flatMap((e) => e.effects)).not.toContain('apply-ratings');
   });
 });

@@ -4,6 +4,7 @@ import type { NavItem } from '@/components';
 export const MAIN_NAV: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard' },
   { label: 'Pools', href: '/pools' },
+  { label: 'Battles', href: '/battles' },
   { label: 'Leaderboard', href: '/leaderboard' },
 ];
 

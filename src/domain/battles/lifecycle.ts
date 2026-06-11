@@ -71,6 +71,14 @@ export function canTransition(from: BattleStatus, to: BattleStatus): boolean {
   return BATTLE_TRANSITIONS[from].includes(to);
 }
 
+/**
+ * Statuses where a player is committed to a battle in motion — the slice-level
+ * "one battle at a time" guard reads this set (the ACTIVE_POOL_STATUSES
+ * pattern). `challenged`/`queued` are pending invitations, not commitments, so
+ * they never block entering another battle.
+ */
+export const ACTIVE_BATTLE_STATUSES = ['matched', 'countdown', 'live'] as const;
+
 /** Everything the lifecycle rules need to decide a transition — plain data. */
 export interface BattleSnapshot {
   status: BattleStatus;
