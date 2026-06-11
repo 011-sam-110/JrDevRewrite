@@ -394,3 +394,58 @@ describe('opponent progress relay', () => {
     expect(w.a.last()).toEqual({ type: 'error', code: 'not-live' });
   });
 });
+
+/* ------------------------------------------------- anti-cheat telemetry (M14) */
+
+describe('in-match anti-cheat telemetry', () => {
+  it('records live telemetry server-stamped as seconds from the go', () => {
+    const w = makeRoom();
+    toLive(w);
+
+    w.advanceTo(at(COUNTDOWN_SECONDS + 7));
+    w.room.recordTelemetry('user-a', 'focus-lost');
+    w.advanceTo(at(COUNTDOWN_SECONDS + 9));
+    w.room.recordTelemetry('user-a', 'focus-regained');
+    w.advanceTo(at(COUNTDOWN_SECONDS + 30));
+    w.room.recordTelemetry('user-b', 'paste-blocked');
+
+    // The client never supplied a time — these stamps are the server clock's.
+    expect(w.room.telemetryLog).toEqual([
+      { side: 'a', kind: 'focus-lost', atSeconds: 7 },
+      { side: 'a', kind: 'focus-regained', atSeconds: 9 },
+      { side: 'b', kind: 'paste-blocked', atSeconds: 30 },
+    ]);
+  });
+
+  it('is NEVER relayed to the opponent (a cheat signal must not tip anyone off)', () => {
+    const w = makeRoom();
+    toLive(w);
+    const before = w.b.events.length;
+
+    w.room.recordTelemetry('user-a', 'paste-blocked');
+
+    expect(w.b.events).toHaveLength(before); // b heard nothing
+    expect(w.a.events.filter((e) => e.type === 'error')).toHaveLength(0); // no echo either
+  });
+
+  it('silently drops telemetry outside live (nothing is being measured yet)', () => {
+    const w = makeRoom();
+    toCountdown(w);
+
+    w.room.recordTelemetry('user-a', 'focus-lost');
+
+    expect(w.room.telemetryLog).toEqual([]);
+    // Fire-and-forget: unlike progress, no error frame — blur/focus noise during
+    // pre-live phases must not generate an error storm.
+    expect(w.a.events.filter((e) => e.type === 'error')).toHaveLength(0);
+  });
+
+  it('ignores telemetry from a non-player', () => {
+    const w = makeRoom();
+    toLive(w);
+
+    w.room.recordTelemetry('user-x', 'paste-blocked');
+
+    expect(w.room.telemetryLog).toEqual([]);
+  });
+});

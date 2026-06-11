@@ -33,6 +33,30 @@ describe('parseClientEvent — accepts every client event shape', () => {
     });
   });
 
+  it('parses telemetry with a known kind', () => {
+    expect(parse({ type: 'telemetry', kind: 'paste-blocked' })).toEqual({
+      type: 'telemetry',
+      kind: 'paste-blocked',
+    });
+    expect(parse({ type: 'telemetry', kind: 'focus-lost' })).toEqual({
+      type: 'telemetry',
+      kind: 'focus-lost',
+    });
+    expect(parse({ type: 'telemetry', kind: 'focus-regained' })).toEqual({
+      type: 'telemetry',
+      kind: 'focus-regained',
+    });
+  });
+
+  it('strips a client-supplied timestamp from telemetry (the server stamps time)', () => {
+    // Client clocks are untrusted — same posture as GitHub commit timestamps.
+    // A frame carrying its own `at` must not let that value travel.
+    expect(parse({ type: 'telemetry', kind: 'focus-lost', at: '1999-01-01T00:00:00Z' })).toEqual({
+      type: 'telemetry',
+      kind: 'focus-lost',
+    });
+  });
+
   it('ignores unknown extra fields rather than rejecting (forward compatibility)', () => {
     expect(parse({ type: 'ready', later: true })).toEqual({ type: 'ready' });
   });
@@ -66,6 +90,12 @@ describe('parseClientEvent — rejects everything else (wire input is untrusted)
     expect(parse({ type: 'join' })).toBeNull();
     expect(parse({ type: 'join', battleId: '' })).toBeNull();
     expect(parse({ type: 'join', battleId: { id: 'b1' } })).toBeNull();
+  });
+
+  it('rejects telemetry with a missing or unknown kind', () => {
+    expect(parse({ type: 'telemetry' })).toBeNull();
+    expect(parse({ type: 'telemetry', kind: 'mouse-moved' })).toBeNull();
+    expect(parse({ type: 'telemetry', kind: 7 })).toBeNull();
   });
 
   it('rejects progress with a negative, fractional, or non-numeric testsPassed', () => {

@@ -133,7 +133,8 @@ export function startRealtimeServer(options: RealtimeServerOptions): Promise<Rea
           }
           case 'ready':
           case 'quit':
-          case 'progress': {
+          case 'progress':
+          case 'telemetry': {
             if (userId === null) {
               send({ type: 'error', code: 'not-authenticated' });
               return;
@@ -144,7 +145,8 @@ export function startRealtimeServer(options: RealtimeServerOptions): Promise<Rea
             }
             if (event.type === 'ready') room.ready(userId);
             else if (event.type === 'quit') room.quit(userId);
-            else room.progress(userId, event.testsPassed);
+            else if (event.type === 'progress') room.progress(userId, event.testsPassed);
+            else room.recordTelemetry(userId, event.kind);
             return;
           }
         }

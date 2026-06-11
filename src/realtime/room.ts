@@ -37,7 +37,20 @@ import type {
   RoomStateEvent,
   ServerEvent,
   SideFlags,
+  TelemetryKind,
 } from '@/lib/match-events';
+
+/**
+ * One captured anti-cheat signal. `atSeconds` is stamped by the SERVER clock
+ * relative to the go — the client only ever names the kind (its clock is
+ * untrusted, the same posture as GitHub commit timestamps). M15 persists this
+ * log with the result; M16's pure predicates read it post-match.
+ */
+export interface MatchTelemetryRecord {
+  side: PlayerSide;
+  kind: TelemetryKind;
+  atSeconds: number;
+}
 
 /** How often the server re-syncs its authoritative remaining time while live. */
 export const TIMER_SYNC_SECONDS = 10;
@@ -88,6 +101,7 @@ export class BattleRoom {
     a: null,
     b: null,
   };
+  private readonly telemetry_: MatchTelemetryRecord[] = [];
 
   constructor(
     private readonly config: RoomConfig,
@@ -198,6 +212,26 @@ export class BattleRoom {
       return;
     }
     this.sendTo(opponentOf(side), { type: 'opponent-progress', testsPassed });
+  }
+
+  /**
+   * Capture an in-match anti-cheat signal. Live-only and fire-and-forget:
+   * outside live nothing is being measured, and unlike `progress` no error is
+   * echoed — blur/focus noise in earlier phases must not become an error storm.
+   * The record goes to the server log ONLY; the opponent is never tipped off.
+   */
+  recordTelemetry(userId: string, kind: TelemetryKind): void {
+    const side = this.sideOf(userId);
+    if (!side || this.battleState.status !== 'live') return;
+    const goAt = this.battleState.goAt;
+    if (!goAt) return;
+    const atSeconds = Math.round((this.deps.now().getTime() - goAt.getTime()) / 1000);
+    this.telemetry_.push({ side, kind, atSeconds });
+  }
+
+  /** The captured signal log — M15 persists it alongside the result. */
+  get telemetryLog(): readonly MatchTelemetryRecord[] {
+    return this.telemetry_;
   }
 
   /* --------------------------------------------------------------- the clocks */

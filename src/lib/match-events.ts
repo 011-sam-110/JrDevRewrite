@@ -29,12 +29,26 @@ export interface RevealedProblem {
 
 /* ---------------------------------- client → server ---------------------- */
 
+/**
+ * In-match anti-cheat signals (CLAUDE.md → battles, in-match): paste attempts
+ * blocked by the editor and tab/window focus changes. The client reports only
+ * the KIND — the server stamps the time with its own clock, the same
+ * never-trust-client-timestamps posture as the GitHub repo signals.
+ */
+export const TELEMETRY_KINDS = ['paste-blocked', 'focus-lost', 'focus-regained'] as const;
+export type TelemetryKind = (typeof TELEMETRY_KINDS)[number];
+
+export function isTelemetryKind(value: unknown): value is TelemetryKind {
+  return typeof value === 'string' && (TELEMETRY_KINDS as readonly string[]).includes(value);
+}
+
 export type ClientEvent =
   | { type: 'hello'; token: string }
   | { type: 'join'; battleId: string }
   | { type: 'ready' }
   | { type: 'quit' }
-  | { type: 'progress'; testsPassed: number };
+  | { type: 'progress'; testsPassed: number }
+  | { type: 'telemetry'; kind: TelemetryKind };
 
 /* ---------------------------------- server → client ---------------------- */
 
@@ -132,6 +146,8 @@ export function parseClientEvent(raw: string): ClientEvent | null {
       if (typeof n !== 'number' || !Number.isInteger(n) || n < 0) return null;
       return { type: 'progress', testsPassed: n };
     }
+    case 'telemetry':
+      return isTelemetryKind(value.kind) ? { type: 'telemetry', kind: value.kind } : null;
     default:
       return null;
   }
